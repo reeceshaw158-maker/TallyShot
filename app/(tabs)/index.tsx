@@ -160,7 +160,7 @@ export default function ReceiptsScreen() {
   };
 
   const monthTotal = receipts
-    .filter((r) => r.status === 'complete' && r.date.startsWith(new Date().toISOString().slice(0, 7)))
+    .filter((r) => r.status === 'complete' && r.date.startsWith(new Date().toLocaleDateString('en-CA').slice(0, 7)))
     .reduce((s, r) => s + r.total, 0);
 
   const filterChips: { id: string; label: string; active: boolean; onPress: () => void; icon: string; tinted?: boolean }[] = [

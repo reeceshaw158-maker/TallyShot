@@ -1,19 +1,18 @@
 /**
- * SpringButton — a drop-in replacement for TouchableOpacity that adds
- * a Material 3 Expressive spring-scale press effect.
+ * SpringButton — drop-in replacement for TouchableOpacity with a
+ * spring-scale press effect, built on React Native's built-in Animated API.
  *
- * On press-in the button scales to 0.96; on press-out it springs back
- * with stiffness=300 / damping=20, giving a satisfying elastic snap.
- * Works on both Android and iOS.
+ * Press-in scales to 0.96; release springs back with tension 300 / friction 20.
+ * No third-party dependencies.
  */
-import { useCallback } from 'react';
-import { StyleProp, ViewStyle, GestureResponderEvent } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import { Pressable } from 'react-native';
+import { useRef, useCallback } from 'react';
+import {
+  Animated,
+  Pressable,
+  StyleProp,
+  ViewStyle,
+  GestureResponderEvent,
+} from 'react-native';
 
 interface SpringButtonProps {
   onPress?: (e: GestureResponderEvent) => void;
@@ -22,10 +21,7 @@ interface SpringButtonProps {
   children: React.ReactNode;
   disabled?: boolean;
   hitSlop?: number;
-  activeOpacity?: number; // accepted but ignored — opacity is not used here
 }
-
-const SPRING_CONFIG = { stiffness: 300, damping: 20 };
 
 export function SpringButton({
   onPress,
@@ -35,19 +31,25 @@ export function SpringButton({
   disabled,
   hitSlop,
 }: SpringButtonProps) {
-  const scale = useSharedValue(1);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.96, SPRING_CONFIG);
-  }, []);
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 20,
+    }).start();
+  }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1, SPRING_CONFIG);
-  }, []);
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 20,
+    }).start();
+  }, [scale]);
 
   return (
     <Pressable
@@ -58,7 +60,9 @@ export function SpringButton({
       hitSlop={hitSlop}
       disabled={disabled}
     >
-      <Animated.View style={[animStyle, style]}>{children}</Animated.View>
+      <Animated.View style={[style, { transform: [{ scale }] }]}>
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }

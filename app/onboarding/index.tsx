@@ -1,11 +1,6 @@
 import { useState, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions, LayoutAnimation } from 'react-native';
 import { SpringButton } from '../../src/components/SpringButton';
-
-// Enable LayoutAnimation on Android (it's a no-op on iOS without this).
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';

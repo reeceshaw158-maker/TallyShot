@@ -8,7 +8,7 @@ import { useAppStore } from '../src/stores/appStore';
 import { Category, ReceiptDraft, CATEGORY_DEDUCTIBLE_DEFAULTS } from '../src/types';
 import { ExtractionResult } from '../src/schemas/extraction';
 import { useThemeTokens } from '../src/theme';
-import * as Haptics from 'expo-haptics';
+import { hapticMedium } from '../src/utils/haptics';
 
 type State = 'extracting' | 'error';
 
@@ -75,14 +75,14 @@ export default function ProcessingScreen() {
       if (quickScan && isExtractionConfident(result)) {
         await saveConfident(result);
         incrementScanCount(); // only after receipt is safely saved
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        hapticMedium();
         return;
       }
 
       // Otherwise: send to Review for the user to confirm.
       // Count the scan now — extraction succeeded even if user edits before saving.
       incrementScanCount();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      hapticMedium();
       router.replace({
         pathname: '/review/[id]',
         params: {

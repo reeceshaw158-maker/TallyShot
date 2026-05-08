@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Text, Snackbar } from 'react-native-paper';
 import { router, useFocusEffect } from 'expo-router';
@@ -47,6 +48,8 @@ export default function ReceiptsScreen() {
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const firstLoadDone = useRef(false);
 
   // ── Multi-select ────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false);
@@ -132,6 +135,10 @@ export default function ReceiptsScreen() {
     ]);
     setReceipts(data);
     setNeedsReviewCount(count);
+    if (!firstLoadDone.current) {
+      firstLoadDone.current = true;
+      setInitialLoading(false);
+    }
   }, [search, filter]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -254,6 +261,13 @@ export default function ReceiptsScreen() {
         </View>
       )}
 
+      {/* Initial load spinner — shown only on first mount before data arrives */}
+      {initialLoading && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={t.accent} />
+        </View>
+      )}
+
       {/* Home banner — interruptive notice for failed extractions. Counters
           Dext's silent-upload-failure review pattern: when something goes
           wrong with the AI we surface it loudly so the user never wonders
@@ -277,6 +291,9 @@ export default function ReceiptsScreen() {
         </TouchableOpacity>
       )}
 
+      {/* Everything below hidden until first load completes */}
+      {!initialLoading && (<>
+
       {/* Undo snackbar — appears after delete from detail screen or multi-select.
           Duration 5 s matches the permanent-delete delay. Sits above the tab
           bar by using the insets.bottom offset so it's never hidden. */}
@@ -293,6 +310,7 @@ export default function ReceiptsScreen() {
       <FlatList
         data={receipts}
         keyExtractor={(item) => String(item.id)}
+        style={{ flex: 1 }}
         ListHeaderComponent={
           <View>
             {/* SEARCH */}
@@ -484,6 +502,8 @@ export default function ReceiptsScreen() {
           );
         }}
       />
+
+      </>)}
     </View>
   );
 }

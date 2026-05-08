@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — TallyShot</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0e1a;
+      color: #e2e8f0;
+      line-height: 1.7;
+      padding: 40px 20px 80px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    .logo {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 48px;
+    }
+    .logo-mark {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: #6366f1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .logo-name { font-size: 22px; font-weight: 700; color: #fff; }
+    h1 { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    .updated { font-size: 13px; color: #6366f1; margin-bottom: 40px; }
+    h2 {
+      font-size: 16px; font-weight: 700; color: #a5b4fc;
+      text-transform: uppercase; letter-spacing: 0.6px;
+      margin: 36px 0 12px;
+    }
+    p { margin-bottom: 14px; color: #cbd5e1; font-size: 15px; }
+    ul { padding-left: 20px; margin-bottom: 14px; }
+    li { color: #cbd5e1; font-size: 15px; margin-bottom: 6px; }
+    a { color: #6366f1; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card {
+      background: #1a1744; border: 1px solid #2d2a6e;
+      border-radius: 14px; padding: 20px 24px; margin: 24px 0;
+    }
+    .card p { margin: 0; }
+    hr { border: none; border-top: 1px solid #2d2a6e; margin: 40px 0; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="logo">
+    <div class="logo-mark">🧾</div>
+    <span class="logo-name">TallyShot</span>
+  </div>
+
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: May 2025</p>
+
+  <div class="card">
+    <p><strong style="color:#fff">Short version:</strong> Your receipt photos and data stay on your device.
+    We send receipt images to an AI service to extract text — nothing else is collected,
+    sold, or shared.</p>
+  </div>
+
+  <h2>1. Who we are</h2>
+  <p>TallyShot is an Android app that lets you photograph receipts and automatically
+  extract the details using AI. It is developed and maintained as an independent
+  application.</p>
+
+  <h2>2. What data we collect</h2>
+
+  <p><strong style="color:#fff">Data stored on your device only:</strong></p>
+  <ul>
+    <li>Receipt photos you take or import</li>
+    <li>Extracted receipt data (merchant, date, amount, category)</li>
+    <li>Your app settings (currency preference, tax mode, scan count)</li>
+  </ul>
+
+  <p><strong style="color:#fff">Data sent off your device:</strong></p>
+  <ul>
+    <li>Receipt images are sent to our AI extraction service (a Cloudflare Worker
+        calling the Claude API by Anthropic) solely to extract text from the image.
+        Images are not stored by the service after processing.</li>
+  </ul>
+
+  <p><strong style="color:#fff">Data we never collect:</strong></p>
+  <ul>
+    <li>Your name, email address, or any account information</li>
+    <li>Location data</li>
+    <li>Any data from your photo library beyond the specific receipt image you choose</li>
+    <li>Device identifiers or advertising IDs</li>
+    <li>Analytics or crash telemetry</li>
+  </ul>
+
+  <h2>3. Camera and photo library</h2>
+  <p>TallyShot requests access to your camera so you can photograph receipts directly
+  in the app. It requests access to your photo library only when you explicitly tap
+  "Choose from Gallery" — it does not browse or index your library.</p>
+  <p>You can revoke these permissions at any time in your device Settings.</p>
+
+  <h2>4. AI extraction</h2>
+  <p>When you scan a receipt, the image is sent over HTTPS to a secure processing
+  endpoint. The service extracts text fields (merchant, date, total, line items) and
+  returns them to the app. The image is not retained after the response is sent.</p>
+  <p>This service is powered by Anthropic's Claude API. Anthropic's own privacy
+  practices apply to that processing —
+  see <a href="https://www.anthropic.com/privacy" target="_blank">anthropic.com/privacy</a>.</p>
+
+  <h2>5. Data storage</h2>
+  <p>All receipt data is stored locally on your device using SQLite. We do not operate
+  servers that store your receipts. If you uninstall the app, all locally stored
+  data is deleted.</p>
+
+  <h2>6. Data sharing</h2>
+  <p>We do not sell, trade, or share your data with any third parties for marketing,
+  advertising, or analytics purposes.</p>
+  <p>The only external service your data touches is the AI extraction endpoint
+  described in section 4 above.</p>
+
+  <h2>7. Children</h2>
+  <p>TallyShot is not directed at children under 13. We do not knowingly collect
+  any information from children.</p>
+
+  <h2>8. Your rights</h2>
+  <p>Because your data is stored only on your device, you have full control over it.
+  You can delete individual receipts inside the app, or delete all data by
+  uninstalling the app.</p>
+
+  <h2>9. Changes to this policy</h2>
+  <p>If we make material changes to this policy, we will update the "Last updated"
+  date at the top of this page. Continued use of the app after changes constitutes
+  acceptance of the revised policy.</p>
+
+  <h2>10. Contact</h2>
+  <p>If you have any questions about this privacy policy, please contact us at:<br/>
+  <a href="mailto:privacy@tallyshot.app">privacy@tallyshot.app</a></p>
+
+  <hr/>
+  <p style="font-size:13px; color:#4a5568; text-align:center;">
+    &copy; 2025 TallyShot. All rights reserved.
+  </p>
+
+</div>
+</body>
+</html>

@@ -75,14 +75,14 @@ export default function ProcessingScreen() {
       if (quickScan && isExtractionConfident(result)) {
         await saveConfident(result);
         incrementScanCount(); // only after receipt is safely saved
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         return;
       }
 
       // Otherwise: send to Review for the user to confirm.
       // Count the scan now — extraction succeeded even if user edits before saving.
       incrementScanCount();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.replace({
         pathname: '/review/[id]',
         params: {

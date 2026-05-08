@@ -167,7 +167,7 @@ export default function ReviewScreen() {
           await setReceiptStatus(Number(id), 'complete');
         }
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       router.replace('/(tabs)');
     } catch (err: any) {
       Alert.alert('Save failed', err.message);

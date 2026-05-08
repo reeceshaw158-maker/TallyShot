@@ -56,8 +56,19 @@ export default function ProcessingScreen() {
 
   const run = async () => {
     setState('extracting');
+    // 30-second safety net — if the worker never responds the user is
+    // stuck on the spinner forever. This transitions to error so they
+    // can retry or save manually.
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      setErrorMsg('The AI is taking too long. Check your connection and try again.');
+      setState('error');
+    }, 30_000);
     try {
       const result = await extractReceiptData(imageUri, taxMode, taxLabel);
+      clearTimeout(timeoutId);
+      if (timedOut) return;
 
       // Quick Scan: save direct + skip review when AI is confident.
       if (quickScan && isExtractionConfident(result)) {
@@ -78,6 +89,8 @@ export default function ProcessingScreen() {
         },
       });
     } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (timedOut) return; // timeout already showed the error
       setErrorMsg(err?.message ?? 'Unknown error');
       setState('error');
     }

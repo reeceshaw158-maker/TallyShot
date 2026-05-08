@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, Image, Alert, TextInput, TouchableOpacity, Switch } from 'react-native';
+import { SpringButton } from '../../src/components/SpringButton';
 import { Text, Menu } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -339,17 +340,16 @@ export default function ReviewScreen() {
         />
       </Section>
 
-      <TouchableOpacity
+      <SpringButton
         style={[styles.saveBtn, { backgroundColor: t.cta }, saving && { opacity: 0.6 }]}
         onPress={handleSave}
         disabled={saving}
-        activeOpacity={0.85}
       >
         <MaterialCommunityIcons name="check" size={20} color={t.ctaText} />
         <Text style={[styles.saveBtnText, { color: t.ctaText }]}>
           {saving ? 'Saving...' : 'Save Receipt'}
         </Text>
-      </TouchableOpacity>
+      </SpringButton>
     </ScrollView>
   );
 }

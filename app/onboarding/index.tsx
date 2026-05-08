@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { SpringButton } from '../../src/components/SpringButton';
 
 // Enable LayoutAnimation on Android (it's a no-op on iOS without this).
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -143,10 +144,9 @@ export default function Onboarding() {
 
       {/* CTA */}
       <View style={styles.footer}>
-        <TouchableOpacity
+        <SpringButton
           style={[styles.cta, { backgroundColor: t.cta }]}
           onPress={goNext}
-          activeOpacity={0.85}
         >
           <Text style={[styles.ctaText, { color: t.ctaText }]}>
             {step === 'welcome' && 'Get started'}
@@ -154,7 +154,7 @@ export default function Onboarding() {
             {step === 'permissions' && (cameraPermission?.granted ? 'Continue' : 'Allow access')}
             {step === 'free_tier' && 'Start scanning'}
           </Text>
-        </TouchableOpacity>
+        </SpringButton>
       </View>
     </View>
   );

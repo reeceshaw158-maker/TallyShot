@@ -25,6 +25,7 @@ import { Receipt, CATEGORIES, ReceiptStatus } from '../../src/types';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
 import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
+import { SpringButton } from '../../src/components/SpringButton';
 import { CATEGORY_ICONS } from '../../src/constants';
 import * as Haptics from 'expo-haptics';
 
@@ -246,14 +247,13 @@ export default function ReceiptsScreen() {
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <TouchableOpacity
+              <SpringButton
                 style={[styles.scanBtn, { backgroundColor: t.cta }]}
                 onPress={() => router.push('/capture')}
-                activeOpacity={0.85}
               >
                 <MaterialCommunityIcons name="camera-plus" size={20} color={t.ctaText} />
                 <Text style={[styles.scanBtnText, { color: t.ctaText }]}>Scan</Text>
-              </TouchableOpacity>
+              </SpringButton>
               {!isPro && (
                 <Text style={[styles.scansLeft, { color: t.textSubtle }]}>
                   {scansRemaining} AI scans left

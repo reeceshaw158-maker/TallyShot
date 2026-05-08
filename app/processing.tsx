@@ -167,8 +167,8 @@ export default function ProcessingScreen() {
             <Button mode="outlined" onPress={run} textColor={t.textPrimary} style={styles.errorBtn}>
               Try AI again
             </Button>
-            <Button onPress={() => router.replace('/(tabs)')} textColor={t.textMuted}>
-              Cancel
+            <Button onPress={saveAsNeedsReview} textColor={t.textMuted}>
+              Save & exit
             </Button>
           </View>
         </View>

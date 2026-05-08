@@ -1,5 +1,29 @@
 # TallyShot changelog
 
+## Unreleased — Slice 10: Smoothness pass
+
+### S1 — Cold start white flash eliminated
+`_layout.tsx` returned `null` while Inter fonts loaded, causing a 1-frame
+white (or black in dark mode) flash before anything appeared. Now returns a
+`View` with the correct theme background colour so the transition is invisible.
+
+### S2 — Receipts list loading spinner
+The list flashed empty then filled in on every app open. Added `initialLoading`
+state: an `ActivityIndicator` shows until the first SQLite query resolves, then
+the list (or empty state) appears cleanly in one step.
+
+### S3 — Stats loading spinner
+Stats screen showed blank charts for a frame before data arrived. Now shows
+a full-screen `ActivityIndicator` until the DB query resolves. Resets whenever
+the user switches between This Month / Last Month.
+
+### S4 — 30-second timeout on OCR processing
+If the Cloudflare Worker never responded (network drop, worker cold-start hang)
+the spinner ran forever with no exit. After 30 seconds the screen now
+transitions to the error state so the user can retry or save manually.
+
+---
+
 ## Unreleased — Slice 9: Bug hunt & fix pass
 
 10 bugs found and fixed across all screens. No new features — pure stability.

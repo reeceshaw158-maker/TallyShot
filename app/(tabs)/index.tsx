@@ -153,7 +153,7 @@ export default function ReceiptsScreen() {
 
   const fmt = (amount: number, currency: string) => {
     try {
-      return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(amount);
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
     } catch {
       return `${currency} ${amount.toFixed(2)}`;
     }

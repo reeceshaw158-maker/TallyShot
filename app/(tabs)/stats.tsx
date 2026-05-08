@@ -50,7 +50,7 @@ export default function StatsScreen() {
 
   const fmt = (n: number) => {
     try {
-      return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(n);
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
     } catch {
       return `${currency} ${n.toFixed(2)}`;
     }

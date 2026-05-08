@@ -1,5 +1,10 @@
 import { useState, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions, LayoutAnimation, Platform, UIManager } from 'react-native';
+
+// Enable LayoutAnimation on Android (it's a no-op on iOS without this).
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useCameraPermissions } from 'expo-camera';
@@ -33,6 +38,7 @@ export default function Onboarding() {
 
   /** Scroll the pager to a given page index and sync step state. */
   const scrollToIndex = (index: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
     setStep(STEP_ORDER[index]);
   };
@@ -57,7 +63,10 @@ export default function Onboarding() {
   const onSwipeEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     const clamped = Math.max(0, Math.min(index, STEP_ORDER.length - 1));
-    if (clamped !== stepIndex) setStep(STEP_ORDER[clamped]);
+    if (clamped !== stepIndex) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setStep(STEP_ORDER[clamped]);
+    }
   };
 
   return (
@@ -308,7 +317,7 @@ const styles = StyleSheet.create({
   topBtn: { width: 56, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
   skipText: { fontFamily: 'Inter_500Medium', fontSize: 14, textAlign: 'right', width: 56 },
   dots: { flexDirection: 'row', gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 4, transitionDuration: '200ms' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   dotActive: { width: 22, borderRadius: 4 },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 24 },

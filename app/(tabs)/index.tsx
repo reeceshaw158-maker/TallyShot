@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getAllReceipts,
   getNeedsReviewCount,
+  getMonthlySummary,
   archiveReceipt,
   restoreReceipt,
   permanentlyDeleteReceipt,
@@ -48,6 +49,7 @@ export default function ReceiptsScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>({ kind: 'all' });
   const [needsReviewCount, setNeedsReviewCount] = useState(0);
+  const [monthTotalAll, setMonthTotalAll] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const firstLoadDone = useRef(false);
@@ -130,12 +132,15 @@ export default function ReceiptsScreen() {
     if (filter.kind === 'category') opts.category = filter.value;
     if (filter.kind === 'needs_review') opts.status = 'needs_review' as ReceiptStatus;
     if (filter.kind === 'deductible') opts.deductibleOnly = true;
-    const [data, count] = await Promise.all([
+    const currentYM = new Date().toLocaleDateString('en-CA').slice(0, 7);
+    const [data, count, monthlySummary] = await Promise.all([
       getAllReceipts(opts),
       getNeedsReviewCount(),
+      getMonthlySummary(currentYM),
     ]);
     setReceipts(data);
     setNeedsReviewCount(count);
+    setMonthTotalAll(monthlySummary.total);
     if (!firstLoadDone.current) {
       firstLoadDone.current = true;
       setInitialLoading(false);
@@ -157,10 +162,6 @@ export default function ReceiptsScreen() {
       return `${currency} ${amount.toFixed(2)}`;
     }
   };
-
-  const monthTotal = receipts
-    .filter((r) => r.status === 'complete' && r.date.startsWith(new Date().toLocaleDateString('en-CA').slice(0, 7)))
-    .reduce((s, r) => s + r.total, 0);
 
   const filterChips: { id: string; label: string; active: boolean; onPress: () => void; icon: string; tinted?: boolean }[] = [
     {
@@ -240,7 +241,7 @@ export default function ReceiptsScreen() {
             <View>
               <Text style={[styles.headerLabel, { color: t.textSubtle }]}>THIS MONTH</Text>
               <Text style={[styles.headerAmount, { color: t.textPrimary }]}>
-                {fmt(monthTotal, currency)}
+                {fmt(monthTotalAll, currency)}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>

@@ -39,6 +39,7 @@ export default function ReceiptsScreen() {
   const insets = useSafeAreaInsets();
   const isPro = useAppStore((s) => s.isPro);
   const scansUsedThisMonth = useAppStore((s) => s.scansUsedThisMonth);
+  const currency = useAppStore((s) => s.currency);
   const scansRemaining = Math.max(0, FREE_SCAN_LIMIT - scansUsedThisMonth);
   const pendingDeletion = useAppStore((s) => s.pendingDeletion);
   const setPendingDeletion = useAppStore((s) => s.setPendingDeletion);
@@ -239,7 +240,7 @@ export default function ReceiptsScreen() {
             <View>
               <Text style={[styles.headerLabel, { color: t.textSubtle }]}>THIS MONTH</Text>
               <Text style={[styles.headerAmount, { color: t.textPrimary }]}>
-                {fmt(monthTotal, 'GBP')}
+                {fmt(monthTotal, currency)}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>

@@ -16,6 +16,7 @@ import { useThemeTokens } from '../../src/theme';
 import { useAppStore } from '../../src/stores/appStore';
 import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
 import { CATEGORY_ICONS } from '../../src/constants';
+import * as Haptics from 'expo-haptics';
 
 export default function ReceiptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -100,6 +101,7 @@ export default function ReceiptDetailScreen() {
    * here too (after the undo window expires).
    */
   const handleHardDelete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Delete receipt?',
       'This cannot be undone.',

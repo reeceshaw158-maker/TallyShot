@@ -24,6 +24,7 @@ import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
 import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
 import { CATEGORY_ICONS } from '../../src/constants';
+import * as Haptics from 'expo-haptics';
 
 type Filter =
   | { kind: 'all' }
@@ -82,6 +83,7 @@ export default function ReceiptsScreen() {
   const handleUndo = async () => {
     undoPressed.current = true;
     setSnackVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (pendingDeletion) {
       for (const id of pendingDeletion.ids) {
         await restoreReceipt(id);
@@ -106,6 +108,7 @@ export default function ReceiptsScreen() {
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const ids = Array.from(selectedIds);
     const label = ids.length === 1
       ? 'Receipt deleted'
@@ -404,6 +407,7 @@ export default function ReceiptsScreen() {
               onPress={() => selectMode ? toggleSelect(item.id) : router.push(`/receipt/${item.id}`)}
               onLongPress={() => {
                 if (!selectMode) {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   setSelectMode(true);
                   setSelectedIds(new Set([item.id]));
                 }

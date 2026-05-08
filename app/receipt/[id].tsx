@@ -504,7 +504,7 @@ function DetailRow({
     <Pressable
       onPress={onEdit}
       onLongPress={onLongPress}
-      delayLongPress={450}
+      delayLongPress={350}
       style={({ pressed }) => [
         styles.detailRow,
         !isLast && { borderBottomColor: tokens.border, borderBottomWidth: StyleSheet.hairlineWidth },

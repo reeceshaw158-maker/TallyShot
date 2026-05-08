@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, ScrollView, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import { View, ScrollView, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,9 +22,11 @@ export default function StatsScreen() {
   const [period, setPeriod] = useState<Period>('this');
   const [summary, setSummary] = useState<Awaited<ReturnType<typeof getMonthlySummary>> | null>(null);
   const [deductible, setDeductible] = useState<{ total: number; count: number }>({ total: 0, count: 0 });
+  const [loading, setLoading] = useState(true);
   const currency = useAppStore((s) => s.currency);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const ym = getYearMonth(period === 'this' ? 0 : -1);
     const [data, ded] = await Promise.all([
       getMonthlySummary(ym),
@@ -32,6 +34,7 @@ export default function StatsScreen() {
     ]);
     setSummary(data);
     setDeductible(ded);
+    setLoading(false);
   }, [period]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -53,6 +56,15 @@ export default function StatsScreen() {
     ? new Date().toLocaleString('default', { month: 'long', year: 'numeric' })
     : new Date(new Date().setMonth(new Date().getMonth() - 1))
         .toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: t.background, alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+        <ActivityIndicator size="large" color={t.accent} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={{ backgroundColor: t.background }} contentContainerStyle={styles.container}>

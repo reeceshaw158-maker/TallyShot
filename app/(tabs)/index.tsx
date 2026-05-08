@@ -23,19 +23,7 @@ import { Receipt, CATEGORIES, ReceiptStatus } from '../../src/types';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
 import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
-
-const CATEGORY_ICONS: Record<string, string> = {
-  'Food & Drink': 'food',
-  'Travel': 'airplane',
-  'Transport': 'car',
-  'Accommodation': 'bed',
-  'Office & Tech': 'laptop',
-  'Utilities': 'lightning-bolt',
-  'Healthcare': 'medical-bag',
-  'Entertainment': 'ticket',
-  'Shopping': 'shopping',
-  'Other': 'tag',
-};
+import { CATEGORY_ICONS } from '../../src/constants';
 
 type Filter =
   | { kind: 'all' }

@@ -6,19 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getMonthlySummary, getMonthlyDeductibleTotal } from '../../src/db/receipts';
 import { useAppStore } from '../../src/stores/appStore';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
-
-const CATEGORY_ICONS: Record<string, string> = {
-  'Food & Drink': 'food',
-  'Travel': 'airplane',
-  'Transport': 'car',
-  'Accommodation': 'bed',
-  'Office & Tech': 'laptop',
-  'Utilities': 'lightning-bolt',
-  'Healthcare': 'medical-bag',
-  'Entertainment': 'ticket',
-  'Shopping': 'shopping',
-  'Other': 'tag',
-};
+import { CATEGORY_ICONS } from '../../src/constants';
 
 type Period = 'this' | 'last';
 

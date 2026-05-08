@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { PaperProvider, MD3LightTheme, MD3DarkTheme, configureFonts } from 'react-native-paper';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import {
   useFonts,
   Inter_400Regular,
@@ -98,7 +98,11 @@ export default function RootLayout() {
     resetScanCountIfNewMonth();
   }, []);
 
-  if (!fontsLoaded) return null;
+  // Show a solid background while fonts load so the user never sees a
+  // raw white/black flash before the first frame renders.
+  if (!fontsLoaded) {
+    return <View style={{ flex: 1, backgroundColor: headerBg }} />;
+  }
 
   return (
     <PaperProvider theme={paperTheme}>

@@ -53,6 +53,7 @@ export default function ReceiptsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const firstLoadDone = useRef(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Multi-select ────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false);
@@ -322,12 +323,18 @@ export default function ReceiptsScreen() {
                 placeholder="Search receipts..."
                 placeholderTextColor={t.textSubtle}
                 value={search}
-                onChangeText={setSearch}
+                onChangeText={(text) => {
+                  setSearch(text);
+                  // Debounce: wait 300 ms after the user stops typing before querying.
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  searchDebounceRef.current = setTimeout(() => load(), 300);
+                }}
                 onSubmitEditing={load}
+                returnKeyType="search"
                 style={[styles.searchInput, { color: t.textPrimary }]}
               />
               {search.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearch(''); setTimeout(load, 0); }} hitSlop={10}>
+                <TouchableOpacity onPress={() => { setSearch(''); if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); setTimeout(load, 0); }} hitSlop={10}>
                   <MaterialCommunityIcons name="close-circle" size={18} color={t.textSubtle} />
                 </TouchableOpacity>
               )}

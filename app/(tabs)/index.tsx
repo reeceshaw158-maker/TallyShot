@@ -53,6 +53,7 @@ export default function ReceiptsScreen() {
   const [monthTotalAll, setMonthTotalAll] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const firstLoadDone = useRef(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -130,22 +131,28 @@ export default function ReceiptsScreen() {
 
   // ── Data loading ─────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    const opts: any = { search: search || undefined };
-    if (filter.kind === 'category') opts.category = filter.value;
-    if (filter.kind === 'needs_review') opts.status = 'needs_review' as ReceiptStatus;
-    if (filter.kind === 'deductible') opts.deductibleOnly = true;
-    const currentYM = new Date().toLocaleDateString('en-CA').slice(0, 7);
-    const [data, count, monthlySummary] = await Promise.all([
-      getAllReceipts(opts),
-      getNeedsReviewCount(),
-      getMonthlySummary(currentYM),
-    ]);
-    setReceipts(data);
-    setNeedsReviewCount(count);
-    setMonthTotalAll(monthlySummary.total);
-    if (!firstLoadDone.current) {
-      firstLoadDone.current = true;
-      setInitialLoading(false);
+    try {
+      setLoadError(false);
+      const opts: any = { search: search || undefined };
+      if (filter.kind === 'category') opts.category = filter.value;
+      if (filter.kind === 'needs_review') opts.status = 'needs_review' as ReceiptStatus;
+      if (filter.kind === 'deductible') opts.deductibleOnly = true;
+      const currentYM = new Date().toLocaleDateString('en-CA').slice(0, 7);
+      const [data, count, monthlySummary] = await Promise.all([
+        getAllReceipts(opts),
+        getNeedsReviewCount(),
+        getMonthlySummary(currentYM),
+      ]);
+      setReceipts(data);
+      setNeedsReviewCount(count);
+      setMonthTotalAll(monthlySummary.total);
+    } catch {
+      setLoadError(true);
+    } finally {
+      if (!firstLoadDone.current) {
+        firstLoadDone.current = true;
+        setInitialLoading(false);
+      }
     }
   }, [search, filter]);
 
@@ -165,12 +172,17 @@ export default function ReceiptsScreen() {
     }
   };
 
+  const selectChip = (fn: () => void) => {
+    Haptics.selectionAsync();
+    fn();
+  };
+
   const filterChips: { id: string; label: string; active: boolean; onPress: () => void; icon: string; tinted?: boolean }[] = [
     {
       id: 'all',
       label: 'All',
       active: filter.kind === 'all',
-      onPress: () => { setFilter({ kind: 'all' }); setTimeout(load, 0); },
+      onPress: () => selectChip(() => { setFilter({ kind: 'all' }); setTimeout(load, 0); }),
       icon: 'view-list',
     },
   ];
@@ -180,7 +192,7 @@ export default function ReceiptsScreen() {
       id: 'needs_review',
       label: `Needs review (${needsReviewCount})`,
       active: filter.kind === 'needs_review',
-      onPress: () => { setFilter({ kind: 'needs_review' }); setTimeout(load, 0); },
+      onPress: () => selectChip(() => { setFilter({ kind: 'needs_review' }); setTimeout(load, 0); }),
       icon: 'alert-circle-outline',
       tinted: true,
     });
@@ -190,7 +202,7 @@ export default function ReceiptsScreen() {
     id: 'deductible',
     label: 'Tax deductible',
     active: filter.kind === 'deductible',
-    onPress: () => { setFilter({ kind: 'deductible' }); setTimeout(load, 0); },
+    onPress: () => selectChip(() => { setFilter({ kind: 'deductible' }); setTimeout(load, 0); }),
     icon: 'cash-multiple',
   });
 
@@ -199,7 +211,7 @@ export default function ReceiptsScreen() {
       id: cat,
       label: cat,
       active: filter.kind === 'category' && filter.value === cat,
-      onPress: () => { setFilter({ kind: 'category', value: cat }); setTimeout(load, 0); },
+      onPress: () => selectChip(() => { setFilter({ kind: 'category', value: cat }); setTimeout(load, 0); }),
       icon: CATEGORY_ICONS[cat] ?? 'tag',
     });
   });
@@ -268,6 +280,25 @@ export default function ReceiptsScreen() {
       {initialLoading && (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <ActivityIndicator size="large" color={t.accent} />
+        </View>
+      )}
+
+      {/* Database error — shown if SQLite fails. Never a silent blank screen. */}
+      {!initialLoading && loadError && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 16 }}>
+          <MaterialCommunityIcons name="database-alert-outline" size={56} color={t.textSubtle} />
+          <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>Couldn't load receipts</Text>
+          <Text style={[styles.emptyBody, { color: t.textMuted, textAlign: 'center' }]}>
+            Something went wrong reading your data. This is usually temporary.
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyBtn, { backgroundColor: t.cta }]}
+            onPress={load}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="refresh" size={18} color={t.ctaText} />
+            <Text style={[styles.emptyBtnText, { color: t.ctaText }]}>Try again</Text>
+          </TouchableOpacity>
         </View>
       )}
 

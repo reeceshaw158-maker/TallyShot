@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, StyleSheet, Image, Alert, TextInput, TouchableOpacity, Switch } from 'react-native';
 import { SpringButton } from '../../src/components/SpringButton';
+import * as Haptics from 'expo-haptics';
 import { Text, Menu } from 'react-native-paper';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -166,6 +167,7 @@ export default function ReviewScreen() {
           await setReceiptStatus(Number(id), 'complete');
         }
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace('/(tabs)');
     } catch (err: any) {
       Alert.alert('Save failed', err.message);

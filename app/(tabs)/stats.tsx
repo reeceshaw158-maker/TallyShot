@@ -7,6 +7,7 @@ import { getMonthlySummary, getMonthlyDeductibleTotal } from '../../src/db/recei
 import { useAppStore } from '../../src/stores/appStore';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { CATEGORY_ICONS } from '../../src/constants';
+import { SkeletonPulse } from '../../src/components/SkeletonPulse';
 
 type Period = 'this' | 'last';
 
@@ -58,11 +59,21 @@ export default function StatsScreen() {
         .toLocaleString('default', { month: 'long', year: 'numeric' });
 
   if (loading) {
+    const skBg = t.surfaceElevated;
     return (
-      <View style={{ flex: 1, backgroundColor: t.background, alignItems: 'center', justifyContent: 'center' }}>
+      <ScrollView style={{ backgroundColor: t.background }} contentContainerStyle={styles.container} scrollEnabled={false}>
         <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
-        <ActivityIndicator size="large" color={t.accent} />
-      </View>
+        {/* Title placeholder */}
+        <SkeletonPulse style={{ height: 34, width: 120, borderRadius: 8, backgroundColor: skBg }} />
+        {/* Period switcher placeholder */}
+        <SkeletonPulse style={{ height: 52, borderRadius: 12, backgroundColor: skBg }} />
+        {/* Hero card placeholder */}
+        <SkeletonPulse style={{ height: 110, borderRadius: 16, backgroundColor: skBg }} />
+        {/* Category section placeholder */}
+        <SkeletonPulse style={{ height: 180, borderRadius: 16, backgroundColor: skBg }} />
+        {/* Merchants placeholder */}
+        <SkeletonPulse style={{ height: 140, borderRadius: 16, backgroundColor: skBg }} />
+      </ScrollView>
     );
   }
 

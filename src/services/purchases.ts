@@ -5,28 +5,33 @@
  * if the API key is missing (e.g. in development) they return sensible
  * defaults instead of crashing.
  */
-import Purchases, {
-  LOG_LEVEL,
-  type PurchasesPackage,
-  type CustomerInfo,
-} from 'react-native-purchases';
+import type { PurchasesPackage } from 'react-native-purchases';
 
 const RC_KEY = process.env.EXPO_PUBLIC_REVENUECAT_KEY ?? '';
 
+// react-native-purchases is a native module — not available in Expo Go.
+// We lazy-require it so Metro doesn't crash when running in the dev client.
+let Purchases: any = null;
+try {
+  Purchases = require('react-native-purchases').default;
+} catch {
+  // Running in Expo Go — purchases unavailable, all functions return safe defaults.
+}
+
 /** Call once at app startup (in _layout.tsx). */
 export async function initPurchases(): Promise<void> {
-  if (!RC_KEY) return;
+  if (!RC_KEY || !Purchases) return;
   try {
-    if (__DEV__) Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+    if (__DEV__) Purchases.setLogLevel(1); // LOG_LEVEL.DEBUG = 1
     Purchases.configure({ apiKey: RC_KEY });
   } catch {}
 }
 
 /** Returns true if the user has an active Pro entitlement. */
 export async function getProStatus(): Promise<boolean> {
-  if (!RC_KEY) return false;
+  if (!RC_KEY || !Purchases) return false;
   try {
-    const info: CustomerInfo = await Purchases.getCustomerInfo();
+    const info = await Purchases.getCustomerInfo();
     return info.entitlements.active['pro'] !== undefined;
   } catch {
     return false;
@@ -35,7 +40,7 @@ export async function getProStatus(): Promise<boolean> {
 
 /** Returns the current offerings (packages + prices) from RevenueCat. */
 export async function getOfferings() {
-  if (!RC_KEY) return null;
+  if (!RC_KEY || !Purchases) return null;
   try {
     return await Purchases.getOfferings();
   } catch {
@@ -54,7 +59,7 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<boolean> {
 
 /** Restore previous purchases. Returns true if Pro was restored. */
 export async function restorePurchases(): Promise<boolean> {
-  if (!RC_KEY) return false;
+  if (!RC_KEY || !Purchases) return false;
   try {
     const info = await Purchases.restorePurchases();
     return info.entitlements.active['pro'] !== undefined;

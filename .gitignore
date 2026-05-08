@@ -32,6 +32,12 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+
+# Worker build artifacts
+worker/node_modules/
+worker/dist/
+worker/.wrangler/
 
 # typescript
 *.tsbuildinfo

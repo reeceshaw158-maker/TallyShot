@@ -72,6 +72,7 @@ interface AppState {
   setSummaryMode: (mode: SummaryMode) => void;
   setPhotoMode: (mode: PhotoMode) => void;
   setPendingDeletion: (v: PendingDeletion | null) => void;
+  setIsPro: (v: boolean) => void;
 }
 
 // Use the device's local calendar date so the monthly reset fires at
@@ -117,7 +118,7 @@ export const useAppStore = create<AppState>()(
       hasCompletedOnboarding: false,
       scansUsedThisMonth: 0,
       scansResetMonth: currentYearMonth(),
-      isPro: true, // hardcoded until RevenueCat is wired in
+      isPro: false, // set at startup via RevenueCat (see _layout.tsx)
       currency: initialPreset.currency,
       theme: 'dark',
       quickScan: false,
@@ -160,6 +161,7 @@ export const useAppStore = create<AppState>()(
       setSummaryMode: (mode) => set({ summaryMode: mode }),
       setPhotoMode: (mode) => set({ photoMode: mode }),
       setPendingDeletion: (v) => set({ pendingDeletion: v }),
+      setIsPro: (v) => set({ isPro: v }),
     }),
     {
       name: 'tallyshot-app-store',

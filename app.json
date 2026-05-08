@@ -73,7 +73,8 @@
         }
       ],
       "expo-sharing",
-      "expo-system-ui"
+      "expo-system-ui",
+      "react-native-purchases"
     ],
     "experiments": {
       "typedRoutes": true

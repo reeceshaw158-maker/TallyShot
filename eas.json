@@ -1,0 +1,47 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_WORKER_URL": "https://tallyshot-proxy.tallyshot.workers.dev"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_WORKER_URL": "https://tallyshot-proxy.tallyshot.workers.dev"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_WORKER_URL": "https://tallyshot-proxy.tallyshot.workers.dev"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
+  }
+}

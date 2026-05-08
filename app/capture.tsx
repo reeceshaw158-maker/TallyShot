@@ -150,14 +150,19 @@ export default function CaptureScreen() {
         <Text style={styles.frameHint}>Position receipt within frame</Text>
       </View>
 
-      {/* Limit banner */}
+      {/* Limit banner — tapping opens paywall */}
       {!canScan && (
-        <View style={styles.limitBanner}>
-          <MaterialCommunityIcons name="lock" size={16} color="white" />
+        <TouchableOpacity
+          style={styles.limitBanner}
+          onPress={() => router.push('/paywall')}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="crown" size={16} color="#fbbf24" />
           <Text style={styles.limitText}>
-            Monthly AI limit reached — you can still add receipts manually
+            Monthly limit reached — tap to unlock unlimited scans
           </Text>
-        </View>
+          <MaterialCommunityIcons name="chevron-right" size={16} color="white" />
+        </TouchableOpacity>
       )}
 
       {/* Add manually — always available */}

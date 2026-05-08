@@ -13,6 +13,7 @@ import {
 import { useAppStore } from '../src/stores/appStore';
 import { getDb } from '../src/db/schema';
 import { darkTokens, lightTokens } from '../src/theme';
+import { initPurchases, getProStatus } from '../src/services/purchases';
 
 const fontConfig = {
   default: { fontFamily: 'Inter_400Regular', fontWeight: '400' as const },
@@ -79,6 +80,7 @@ export default function RootLayout() {
   const systemScheme = useColorScheme();
   const themeMode = useAppStore((s) => s.theme);
   const resetScanCountIfNewMonth = useAppStore((s) => s.resetScanCountIfNewMonth);
+  const setIsPro = useAppStore((s) => s.setIsPro);
 
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -96,6 +98,8 @@ export default function RootLayout() {
   useEffect(() => {
     getDb().catch(console.error);
     resetScanCountIfNewMonth();
+    // Initialise RevenueCat and refresh Pro status on every launch.
+    initPurchases().then(() => getProStatus().then(setIsPro));
   }, []);
 
   // Show a solid background while fonts load so the user never sees a
@@ -123,6 +127,7 @@ export default function RootLayout() {
         <Stack.Screen name="export" options={{ title: 'Export' }} />
         <Stack.Screen name="preview" options={{ title: 'Preview' }} />
         <Stack.Screen name="archived" options={{ title: 'Archived Receipts' }} />
+        <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
     </PaperProvider>
   );

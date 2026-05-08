@@ -60,10 +60,17 @@ export default function Onboarding() {
   };
 
   /** Sync step state when the user swipes manually. */
-  const onSwipeEnd = (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+  const onSwipeEnd = async (e: { nativeEvent: { contentOffset: { x: number } } }) => {
     const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     const clamped = Math.max(0, Math.min(index, STEP_ORDER.length - 1));
     if (clamped !== stepIndex) {
+      // If the user swiped forward past the permissions step, trigger the
+      // permission request just as the CTA button would have.
+      const leavingPermissions = STEP_ORDER[stepIndex] === 'permissions' && clamped > stepIndex;
+      if (leavingPermissions) {
+        if (!cameraPermission?.granted) await requestCameraPermission();
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      }
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setStep(STEP_ORDER[clamped]);
     }

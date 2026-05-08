@@ -13,7 +13,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
+      "backgroundColor": "#110e38"
     },
     "updates": {
       "enabled": true,
@@ -27,7 +27,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1e1b4b"
+        "backgroundColor": "#110e38"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

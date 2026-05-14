@@ -13,7 +13,8 @@ import { hapticMedium } from '../src/utils/haptics';
 type State = 'extracting' | 'error';
 
 export default function ProcessingScreen() {
-  const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
+  const { imageUri, additionalImages } = useLocalSearchParams<{ imageUri: string; additionalImages: string }>();
+  const parsedAdditionalImages: string[] = JSON.parse(additionalImages ?? '[]');
   const [state, setState] = useState<State>('extracting');
   const [errorMsg, setErrorMsg] = useState('');
   const incrementScanCount = useAppStore((s) => s.incrementScanCount);
@@ -46,10 +47,15 @@ export default function ProcessingScreen() {
       payment_method: result.payment_method ?? null,
       invoice_number: result.invoice_number ?? null,
       category,
+      category_id: null,
       notes: '',
       image_uri: imageUri,
+      additional_images: parsedAdditionalImages,
       status: 'complete',
       is_tax_deductible: CATEGORY_DEDUCTIBLE_DEFAULTS[category] ?? false,
+      is_reimbursable: false,
+      refund: false,
+      report_id: null,
     };
     await insertReceipt(draft);
     router.replace('/(tabs)');
@@ -112,10 +118,15 @@ export default function ProcessingScreen() {
         payment_method: null,
         invoice_number: null,
         category: 'Other' as Category,
+        category_id: null,
         notes: '',
         image_uri: imageUri,
+        additional_images: [],
         status: 'needs_review',
         is_tax_deductible: false,
+        refund: false,
+        report_id: null,
+        is_reimbursable: false,
       };
       const id = await insertReceipt(draft);
       router.replace({

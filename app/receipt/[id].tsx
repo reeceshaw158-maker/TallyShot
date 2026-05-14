@@ -10,17 +10,20 @@ import {
   setReceiptStatus,
   recordExtractionFeedback,
 } from '../../src/db/receipts';
+import { getCategoryById } from '../../src/db/categories';
 import { extractReceiptData } from '../../src/services/extraction';
-import { Receipt } from '../../src/types';
+import { Receipt, DbCategory } from '../../src/types';
 import { useThemeTokens } from '../../src/theme';
 import { useAppStore } from '../../src/stores/appStore';
 import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
+import { MerchantAvatar } from '../../src/components/MerchantAvatar';
 import { CATEGORY_ICONS } from '../../src/constants';
 import { hapticHeavy } from '../../src/utils/haptics';
 
 export default function ReceiptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [dbCategory, setDbCategory] = useState<DbCategory | null>(null);
   const [retrying, setRetrying] = useState(false);
   const t = useThemeTokens();
   const taxMode = useAppStore((s) => s.taxMode);
@@ -59,7 +62,11 @@ export default function ReceiptDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      getReceipt(Number(id)).then(setReceipt);
+      getReceipt(Number(id)).then((r) => {
+        setReceipt(r);
+        if (r?.category_id) getCategoryById(r.category_id).then(setDbCategory);
+        else setDbCategory(null);
+      });
     }, [id])
   );
 
@@ -212,16 +219,37 @@ export default function ReceiptDetailScreen() {
         {/* HERO CARD — merchant + total */}
         <Section tokens={t}>
           <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: t.accent + '22' }]}>
-              <MaterialCommunityIcons name={categoryIcon} size={26} color={t.accent} />
-            </View>
+            <MerchantAvatar
+              merchant={receipt.merchant}
+              category={receipt.category}
+              categoryIcon={dbCategory?.icon}
+              categoryColor={dbCategory?.color}
+              size={52}
+              iconColor={t.accent}
+              backgroundColor={t.accent + '22'}
+              borderRadius={14}
+            />
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text style={[styles.merchantName, { color: t.textPrimary }]} numberOfLines={2}>
                 {receipt.merchant || '—'}
               </Text>
               <Text style={[styles.merchantMeta, { color: t.textMuted }]}>
-                {receipt.date} · {receipt.category}
+                {receipt.date}
               </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={[styles.catChip, {
+                  backgroundColor: dbCategory ? dbCategory.color + '20' : t.surfaceElevated,
+                }]}>
+                  <MaterialCommunityIcons
+                    name={(dbCategory?.icon ?? CATEGORY_ICONS[receipt.category] ?? 'tag') as any}
+                    size={11}
+                    color={dbCategory?.color ?? t.textMuted}
+                  />
+                  <Text style={[styles.catChipText, { color: dbCategory?.color ?? t.textMuted }]}>
+                    {dbCategory?.name ?? receipt.category}
+                  </Text>
+                </View>
+              </View>
               <View style={{ marginTop: 6 }}>
                 <ReceiptStatusPill status={receipt.status} size="md" hideWhenComplete />
               </View>
@@ -328,6 +356,13 @@ export default function ReceiptDetailScreen() {
             label="Tax deductible"
             value={receipt.is_tax_deductible ? 'Yes' : 'No'}
             valueColor={receipt.is_tax_deductible ? t.deductible : t.textMuted}
+            tokens={t}
+            onEdit={goEdit}
+          />
+          <DetailRow
+            label="Reimbursable"
+            value={receipt.is_reimbursable ? 'Yes' : 'No'}
+            valueColor={receipt.is_reimbursable ? t.accent : t.textMuted}
             tokens={t}
             onEdit={goEdit}
             isLast
@@ -620,6 +655,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
     marginTop: 4,
+  },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  },
+  catChipText: {
+    fontFamily: 'Inter_500Medium', fontSize: 11,
   },
   editIconBtn: {
     width: 44, height: 44, borderRadius: 14,

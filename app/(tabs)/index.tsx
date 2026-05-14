@@ -1,753 +1,398 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+/**
+ * Dashboard — home screen styled after Easy Expense.
+ * Shows: monthly financials, quick-action circles, recent receipts.
+ */
+import { useCallback, useState } from 'react';
 import {
-  View,
-  FlatList,
-  StyleSheet,
-  RefreshControl,
-  TouchableOpacity,
-  StatusBar,
-  TextInput,
-  ActivityIndicator,
+  View, ScrollView, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator,
 } from 'react-native';
-import { Text, Snackbar } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  getAllReceipts,
-  getNeedsReviewCount,
-  getMonthlySummary,
-  archiveReceipt,
-  restoreReceipt,
-  permanentlyDeleteReceipt,
-} from '../../src/db/receipts';
-import { Receipt, CATEGORIES, ReceiptStatus } from '../../src/types';
+import { getAllReceipts, getMonthlySummary, getNeedsReviewCount, getMonthlyDeductibleTotal } from '../../src/db/receipts';
+import { getDrivesSummary } from '../../src/db/drives';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
-import { ReceiptStatusPill } from '../../src/components/ReceiptStatusPill';
-import { SpringButton } from '../../src/components/SpringButton';
-import { CATEGORY_ICONS } from '../../src/constants';
-import { hapticLight, hapticMedium, hapticHeavy } from '../../src/utils/haptics';
+import { MerchantAvatar } from '../../src/components/MerchantAvatar';
+import { Receipt } from '../../src/types';
 
-type Filter =
-  | { kind: 'all' }
-  | { kind: 'category'; value: string }
-  | { kind: 'needs_review' }
-  | { kind: 'deductible' };
+function currentYM() {
+  return new Date().toLocaleDateString('en-CA').slice(0, 7);
+}
 
-export default function ReceiptsScreen() {
+export default function DashboardScreen() {
   const t = useThemeTokens();
   const scheme = useActiveScheme();
   const insets = useSafeAreaInsets();
+  const currency = useAppStore((s) => s.currency);
   const isPro = useAppStore((s) => s.isPro);
   const scansUsedThisMonth = useAppStore((s) => s.scansUsedThisMonth);
-  const currency = useAppStore((s) => s.currency);
-  const scansRemaining = Math.max(0, FREE_SCAN_LIMIT - scansUsedThisMonth);
-  const pendingDeletion = useAppStore((s) => s.pendingDeletion);
-  const setPendingDeletion = useAppStore((s) => s.setPendingDeletion);
+  const scansLeft = Math.max(0, FREE_SCAN_LIMIT - scansUsedThisMonth);
 
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<Filter>({ kind: 'all' });
-  const [needsReviewCount, setNeedsReviewCount] = useState(0);
-  const [monthTotalAll, setMonthTotalAll] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
-  const firstLoadDone = useRef(false);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [monthTotal, setMonthTotal] = useState(0);
+  const [deductibleTotal, setDeductibleTotal] = useState(0);
+  const [receiptCount, setReceiptCount] = useState(0);
+  const [needsReview, setNeedsReview] = useState(0);
+  const [recent, setRecent] = useState<Receipt[]>([]);
+  const [drivesKm, setDrivesKm] = useState(0);
+  const [drivesCount, setDrivesCount] = useState(0);
 
-  // ── Multi-select ────────────────────────────────────────────────────────
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
-
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  // ── Undo / deletion ─────────────────────────────────────────────────────
-  const [snackVisible, setSnackVisible] = useState(false);
-  // Track whether undo was pressed so onDismiss knows not to permanently delete.
-  const undoPressed = useRef(false);
-
-  // Show snackbar whenever a pending deletion arrives.
-  useEffect(() => {
-    if (pendingDeletion) {
-      undoPressed.current = false;
-      setSnackVisible(true);
-      load(); // hide the archived receipt(s) immediately
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingDeletion]);
-
-  const handleUndo = async () => {
-    undoPressed.current = true;
-    setSnackVisible(false);
-    hapticMedium();
-    if (pendingDeletion) {
-      for (const id of pendingDeletion.ids) {
-        await restoreReceipt(id);
-      }
-      setPendingDeletion(null);
-      load();
-    }
-  };
-
-  const handleSnackDismiss = async () => {
-    setSnackVisible(false);
-    if (!undoPressed.current && pendingDeletion) {
-      // Timer expired — permanently delete.
-      // TODO v1.1: if receipts are synced to cloud, delete remote records here too.
-      for (const id of pendingDeletion.ids) {
-        await permanentlyDeleteReceipt(id);
-      }
-      setPendingDeletion(null);
-      load();
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
-    hapticHeavy();
-    const ids = Array.from(selectedIds);
-    const label = ids.length === 1
-      ? 'Receipt deleted'
-      : `${ids.length} receipts deleted`;
-    for (const id of ids) {
-      await archiveReceipt(id);
-    }
-    exitSelectMode();
-    setPendingDeletion({ ids, label });
-  };
-
-  // ── Data loading ─────────────────────────────────────────────────────────
   const load = useCallback(async () => {
-    try {
-      setLoadError(false);
-      const opts: any = { search: search || undefined };
-      if (filter.kind === 'category') opts.category = filter.value;
-      if (filter.kind === 'needs_review') opts.status = 'needs_review' as ReceiptStatus;
-      if (filter.kind === 'deductible') opts.deductibleOnly = true;
-      const currentYM = new Date().toLocaleDateString('en-CA').slice(0, 7);
-      const [data, count, monthlySummary] = await Promise.all([
-        getAllReceipts(opts),
-        getNeedsReviewCount(),
-        getMonthlySummary(currentYM),
-      ]);
-      setReceipts(data);
-      setNeedsReviewCount(count);
-      setMonthTotalAll(monthlySummary.total);
-    } catch {
-      setLoadError(true);
-    } finally {
-      if (!firstLoadDone.current) {
-        firstLoadDone.current = true;
-        setInitialLoading(false);
-      }
-    }
-  }, [search, filter]);
+    setLoading(true);
+    const ym = currentYM();
+    const [summary, ded, all, review, drv] = await Promise.all([
+      getMonthlySummary(ym),
+      getMonthlyDeductibleTotal(ym),
+      getAllReceipts({ includeArchived: false }),
+      getNeedsReviewCount(),
+      getDrivesSummary(),
+    ]);
+    setMonthTotal(summary.total);
+    setDeductibleTotal(ded.total);
+    setReceiptCount(all.length);
+    setNeedsReview(review);
+    setRecent(all.slice(0, 5));
+    setDrivesKm(drv.totalKm);
+    setDrivesCount(drv.count);
+    setLoading(false);
+  }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  };
-
-  const fmt = (amount: number, currency: string) => {
+  const fmt = (n: number) => {
     try {
-      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(n);
     } catch {
-      return `${currency} ${amount.toFixed(2)}`;
+      return `${currency} ${n.toFixed(2)}`;
     }
   };
 
-  const selectChip = (fn: () => void) => {
-    hapticLight();
-    fn();
-  };
+  const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const filterChips: { id: string; label: string; active: boolean; onPress: () => void; icon: string; tinted?: boolean }[] = [
+  const quickActions = [
     {
-      id: 'all',
-      label: 'All',
-      active: filter.kind === 'all',
-      onPress: () => selectChip(() => { setFilter({ kind: 'all' }); setTimeout(load, 0); }),
-      icon: 'view-list',
+      icon: 'camera-plus', label: 'Scan',
+      color: t.cta, bg: t.cta + '20',
+      onPress: () => router.push('/capture'),
+    },
+    {
+      icon: 'car', label: 'Add Drive',
+      color: '#3b82f6', bg: '#3b82f620',
+      onPress: () => router.push('/(tabs)/drives'),
+    },
+    {
+      icon: 'folder-outline', label: 'Reports',
+      color: '#8b5cf6', bg: '#8b5cf620',
+      onPress: () => router.push('/reports' as any),
+    },
+    {
+      icon: 'export-variant', label: 'Export',
+      color: '#6b7280', bg: '#6b728020',
+      onPress: () => router.push('/export'),
     },
   ];
 
-  if (needsReviewCount > 0) {
-    filterChips.push({
-      id: 'needs_review',
-      label: `Needs review (${needsReviewCount})`,
-      active: filter.kind === 'needs_review',
-      onPress: () => selectChip(() => { setFilter({ kind: 'needs_review' }); setTimeout(load, 0); }),
-      icon: 'alert-circle-outline',
-      tinted: true,
-    });
-  }
-
-  filterChips.push({
-    id: 'deductible',
-    label: 'Tax deductible',
-    active: filter.kind === 'deductible',
-    onPress: () => selectChip(() => { setFilter({ kind: 'deductible' }); setTimeout(load, 0); }),
-    icon: 'cash-multiple',
-  });
-
-  CATEGORIES.forEach((cat) => {
-    filterChips.push({
-      id: cat,
-      label: cat,
-      active: filter.kind === 'category' && filter.value === cat,
-      onPress: () => selectChip(() => { setFilter({ kind: 'category', value: cat }); setTimeout(load, 0); }),
-      icon: CATEGORY_ICONS[cat] ?? 'tag',
-    });
-  });
-
   return (
-    <View style={[styles.container, { backgroundColor: t.background }]}>
+    <View style={[styles.screen, { backgroundColor: t.background }]}>
       <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
 
-      {/* HEADER — normal mode: brand + scan CTA.
-               Select mode: selection count + Cancel + Delete. */}
-      {selectMode ? (
-        <View style={[styles.header, styles.selectHeader]}>
-          <TouchableOpacity onPress={exitSelectMode} hitSlop={12}>
-            <MaterialCommunityIcons name="close" size={24} color={t.textPrimary} />
-          </TouchableOpacity>
-          <Text style={[styles.selectCount, { color: t.textPrimary }]}>
-            {selectedIds.size} selected
-          </Text>
-          <TouchableOpacity
-            onPress={handleBulkDelete}
-            disabled={selectedIds.size === 0}
-            style={[
-              styles.selectDeleteBtn,
-              { backgroundColor: t.danger + (selectedIds.size === 0 ? '44' : 'ff') },
-            ]}
-          >
-            <MaterialCommunityIcons name="delete-outline" size={18} color="#fff" />
-            <Text style={styles.selectDeleteText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.header}>
-          <View style={styles.brandRow}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+        {/* ── Header ── */}
+        <View style={[styles.header, { paddingTop: 52 + insets.top }]}>
+          <View style={styles.headerLeft}>
             <View style={[styles.brandMark, { backgroundColor: t.cta }]}>
-              <MaterialCommunityIcons name="receipt" size={20} color={t.ctaText} />
+              <MaterialCommunityIcons name="receipt" size={18} color="#fff" />
             </View>
             <Text style={[styles.brandName, { color: t.textPrimary }]}>TallyShot</Text>
           </View>
-
-          <View style={styles.headerBottom}>
-            <View>
-              <Text style={[styles.headerLabel, { color: t.textSubtle }]}>THIS MONTH</Text>
-              <Text style={[styles.headerAmount, { color: t.textPrimary }]}>
-                {fmt(monthTotalAll, currency)}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <SpringButton
-                style={[styles.scanBtn, { backgroundColor: t.cta }]}
-                onPress={() => router.push('/capture')}
-              >
-                <MaterialCommunityIcons name="camera-plus" size={20} color={t.ctaText} />
-                <Text style={[styles.scanBtnText, { color: t.ctaText }]}>Scan</Text>
-              </SpringButton>
-              {!isPro && (
-                <Text style={[styles.scansLeft, { color: t.textSubtle }]}>
-                  {scansRemaining} AI scans left
-                </Text>
-              )}
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Initial load spinner — shown only on first mount before data arrives */}
-      {initialLoading && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator size="large" color={t.accent} />
-        </View>
-      )}
-
-      {/* Database error — shown if SQLite fails. Never a silent blank screen. */}
-      {!initialLoading && loadError && (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, gap: 16 }}>
-          <MaterialCommunityIcons name="database-alert-outline" size={56} color={t.textSubtle} />
-          <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>Couldn't load receipts</Text>
-          <Text style={[styles.emptyBody, { color: t.textMuted, textAlign: 'center' }]}>
-            Something went wrong reading your data. This is usually temporary.
-          </Text>
           <TouchableOpacity
-            style={[styles.emptyBtn, { backgroundColor: t.cta }]}
-            onPress={load}
-            activeOpacity={0.85}
+            onPress={() => router.push('/(tabs)/settings')}
+            style={[styles.headerBtn, { backgroundColor: t.surface, borderColor: t.border }]}
           >
-            <MaterialCommunityIcons name="refresh" size={18} color={t.ctaText} />
-            <Text style={[styles.emptyBtnText, { color: t.ctaText }]}>Try again</Text>
+            <MaterialCommunityIcons name="cog-outline" size={20} color={t.textMuted} />
           </TouchableOpacity>
         </View>
-      )}
 
-      {/* Home banner — interruptive notice for failed extractions. Counters
-          Dext's silent-upload-failure review pattern: when something goes
-          wrong with the AI we surface it loudly so the user never wonders
-          "did that scan go through?". */}
-      {needsReviewCount > 0 && filter.kind !== 'needs_review' && (
-        <TouchableOpacity
-          onPress={() => { setFilter({ kind: 'needs_review' }); setTimeout(load, 0); }}
-          activeOpacity={0.85}
-          style={[styles.homeBanner, { backgroundColor: t.needsReviewBg, borderColor: t.needsReview + '88' }]}
-        >
-          <MaterialCommunityIcons name="alert-circle" size={20} color={t.needsReview} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.homeBannerTitle, { color: t.needsReview }]}>
-              {needsReviewCount} {needsReviewCount === 1 ? 'receipt needs' : 'receipts need'} review
+        {/* ── Needs Review banner ── */}
+        {needsReview > 0 && (
+          <TouchableOpacity
+            style={[styles.reviewBanner, { backgroundColor: '#fef3c7', borderColor: '#fbbf24' }]}
+            onPress={() => router.push('/(tabs)/stats')}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="alert-circle" size={18} color="#b45309" />
+            <Text style={[styles.reviewText, { color: '#b45309' }]}>
+              {needsReview} receipt{needsReview !== 1 ? 's' : ''} need review — tap to fix
             </Text>
-            <Text style={[styles.homeBannerBody, { color: t.textPrimary }]}>
-              The photo is safe. Tap to fix the extracted details.
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={22} color={t.needsReview} />
-        </TouchableOpacity>
-      )}
+            <MaterialCommunityIcons name="chevron-right" size={18} color="#b45309" />
+          </TouchableOpacity>
+        )}
 
-      {/* Everything below hidden until first load completes */}
-      {!initialLoading && (<>
-
-      {/* Undo snackbar — appears after delete from detail screen or multi-select.
-          Duration 5 s matches the permanent-delete delay. Sits above the tab
-          bar by using the insets.bottom offset so it's never hidden. */}
-      <Snackbar
-        visible={snackVisible}
-        duration={5000}
-        onDismiss={handleSnackDismiss}
-        action={{ label: 'Undo', onPress: handleUndo }}
-        style={{ marginBottom: insets.bottom }}
-      >
-        {pendingDeletion?.label ?? 'Receipt deleted'}
-      </Snackbar>
-
-      <FlatList
-        data={receipts}
-        keyExtractor={(item) => String(item.id)}
-        style={{ flex: 1 }}
-        ListHeaderComponent={
-          <View>
-            {/* SEARCH */}
-            <View style={[styles.searchWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
-              <MaterialCommunityIcons name="magnify" size={18} color={t.textMuted} />
-              <TextInput
-                placeholder="Search receipts..."
-                placeholderTextColor={t.textSubtle}
-                value={search}
-                onChangeText={(text) => {
-                  setSearch(text);
-                  // Debounce: wait 300 ms after the user stops typing before querying.
-                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                  searchDebounceRef.current = setTimeout(() => load(), 300);
-                }}
-                onSubmitEditing={load}
-                returnKeyType="search"
-                style={[styles.searchInput, { color: t.textPrimary }]}
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearch(''); if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); setTimeout(load, 0); }} hitSlop={10}>
-                  <MaterialCommunityIcons name="close-circle" size={18} color={t.textSubtle} />
-                </TouchableOpacity>
-              )}
+        {/* ── Financials card ── */}
+        <View style={[styles.financialsCard, { backgroundColor: t.cta }]}>
+          <Text style={styles.financialsLabel}>{monthLabel.toUpperCase()}</Text>
+          <Text style={styles.financialsAmount}>{fmt(monthTotal)}</Text>
+          <Text style={styles.financialsSub}>Total expenses</Text>
+          <View style={styles.financialsRow}>
+            <View style={styles.financialsStat}>
+              <Text style={styles.financialsStatValue}>{fmt(deductibleTotal)}</Text>
+              <Text style={styles.financialsStatLabel}>Tax Deductible</Text>
             </View>
-
-            {/* FILTER CHIPS */}
-            <FlatList
-              horizontal
-              data={filterChips}
-              keyExtractor={(c) => c.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
-              renderItem={({ item: c }) => {
-                const activeBg = c.tinted ? t.warningBg : t.accent;
-                const activeText = c.tinted ? t.needsReview : t.textInverse;
-                return (
-                  <TouchableOpacity
-                    onPress={c.onPress}
-                    activeOpacity={0.85}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor: c.active ? activeBg : t.surface,
-                        borderColor: c.active ? activeBg : t.border,
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={c.icon as any}
-                      size={14}
-                      color={c.active ? activeText : t.textMuted}
-                    />
-                    <Text
-                      style={[
-                        styles.chipText,
-                        { color: c.active ? activeText : t.textMuted },
-                      ]}
-                    >
-                      {c.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={t.accent}
-            colors={[t.accent]}
-          />
-        }
-        contentContainerStyle={
-          receipts.length === 0
-            ? styles.emptyContainer
-            : { paddingBottom: 24 }
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <View style={[styles.emptyIcon, { backgroundColor: t.surfaceElevated }]}>
-              <MaterialCommunityIcons name="receipt-text-outline" size={48} color={t.accent} />
+            <View style={styles.financialsStatDivider} />
+            <View style={styles.financialsStat}>
+              <Text style={styles.financialsStatValue}>{receiptCount}</Text>
+              <Text style={styles.financialsStatLabel}>Receipts</Text>
             </View>
-            <Text style={[styles.emptyTitle, { color: t.textPrimary }]}>
-              {filter.kind === 'all' ? 'No receipts yet' : 'Nothing matches'}
-            </Text>
-            <Text style={[styles.emptyBody, { color: t.textMuted }]}>
-              {filter.kind === 'all'
-                ? 'Tap Scan to photograph your first receipt'
-                : 'Try a different filter or clear search'}
-            </Text>
-            {filter.kind === 'all' && (
-              <TouchableOpacity
-                style={[styles.emptyBtn, { backgroundColor: t.cta }]}
-                onPress={() => router.push('/capture')}
-                activeOpacity={0.85}
-              >
-                <MaterialCommunityIcons name="camera-plus" size={18} color={t.ctaText} />
-                <Text style={[styles.emptyBtnText, { color: t.ctaText }]}>Scan Receipt</Text>
-              </TouchableOpacity>
-            )}
+            <View style={styles.financialsStatDivider} />
+            <View style={styles.financialsStat}>
+              <Text style={styles.financialsStatValue}>{drivesCount}</Text>
+              <Text style={styles.financialsStatLabel}>Drives</Text>
+            </View>
           </View>
-        }
-        renderItem={({ item }) => {
-          const isNeedsReview = item.status === 'needs_review';
-          const isSelected = selectedIds.has(item.id);
+        </View>
 
-          return (
+        {/* ── Scan limit pill (free users) ── */}
+        {!isPro && (
+          <TouchableOpacity
+            style={[styles.limitPill, { backgroundColor: t.surface, borderColor: t.border }]}
+            onPress={() => router.push('/paywall')}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="crown" size={14} color={t.cta} />
+            <Text style={[styles.limitText, { color: t.textMuted }]}>
+              {scansLeft} free AI scans left this month
+            </Text>
+            <Text style={[styles.limitUpgrade, { color: t.cta }]}>Upgrade →</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* ── Quick actions ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: t.textSubtle }]}>QUICK ACTIONS</Text>
+        </View>
+        <View style={styles.quickRow}>
+          {quickActions.map((a) => (
             <TouchableOpacity
-              style={[
-                styles.card,
-                { backgroundColor: t.surface, borderColor: t.border },
-                isNeedsReview && { borderColor: t.needsReview, borderWidth: 1.5 },
-                isSelected && { borderColor: t.accent, borderWidth: 1.5, backgroundColor: t.accent + '18' },
-              ]}
-              onPress={() => selectMode ? toggleSelect(item.id) : router.push(`/receipt/${item.id}`)}
-              onLongPress={() => {
-                if (!selectMode) {
-                  hapticMedium();
-                  setSelectMode(true);
-                  setSelectedIds(new Set([item.id]));
-                }
-              }}
-              delayLongPress={350}
-              activeOpacity={0.7}
+              key={a.label}
+              style={styles.quickItem}
+              onPress={a.onPress}
+              activeOpacity={0.8}
             >
-              {selectMode && (
-                <MaterialCommunityIcons
-                  name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-                  size={22}
-                  color={isSelected ? t.accent : t.textSubtle}
-                  style={{ marginRight: 4 }}
-                />
-              )}
-              <View
-                style={[
-                  styles.cardIcon,
-                  {
-                    backgroundColor: isNeedsReview
-                      ? t.needsReviewBg
-                      : t.accent + '22',
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={
-                    isNeedsReview
-                      ? 'alert-circle-outline'
-                      : ((CATEGORY_ICONS[item.category] ?? 'tag') as any)
-                  }
-                  size={22}
-                  color={isNeedsReview ? t.needsReview : t.accent}
-                />
+              <View style={[styles.quickCircle, { backgroundColor: a.bg }]}>
+                <MaterialCommunityIcons name={a.icon as any} size={24} color={a.color} />
               </View>
-              <View style={styles.cardMid}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text
-                    style={[styles.cardMerchant, { color: t.textPrimary }]}
-                    numberOfLines={1}
-                  >
-                    {item.merchant ||
-                      (isNeedsReview ? 'Needs review' : 'Unknown merchant')}
-                  </Text>
-                  {item.is_tax_deductible && !isNeedsReview && (
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.deductible }} />
-                  )}
-                </View>
-                <Text
-                  style={[
-                    styles.cardMeta,
-                    { color: isNeedsReview ? t.needsReview : t.textMuted },
-                  ]}
-                >
-                  {isNeedsReview
-                    ? `${item.date} · Failed`
-                    : `${item.date} · ${item.category}`}
-                </Text>
-                {item.status !== 'complete' && (
-                  <View style={{ marginTop: 6 }}>
-                    <ReceiptStatusPill status={item.status} size="sm" />
-                  </View>
-                )}
-              </View>
-              <Text
-                style={[
-                  styles.cardAmount,
-                  { color: isNeedsReview ? t.needsReview : t.textPrimary },
-                ]}
-              >
-                {isNeedsReview && item.total === 0 ? '—' : fmt(item.total, item.currency)}
-              </Text>
+              <Text style={[styles.quickLabel, { color: t.textMuted }]}>{a.label}</Text>
             </TouchableOpacity>
-          );
-        }}
-      />
+          ))}
+        </View>
 
-      </>)}
+        {/* ── Drives summary card ── */}
+        {drivesCount > 0 && (
+          <TouchableOpacity
+            style={[styles.drivesCard, { backgroundColor: t.surface, borderColor: t.border }]}
+            onPress={() => router.push('/(tabs)/drives')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.drivesIcon, { backgroundColor: '#3b82f620' }]}>
+              <MaterialCommunityIcons name="car" size={22} color="#3b82f6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.drivesTitle, { color: t.textPrimary }]}>
+                {drivesCount} drive{drivesCount !== 1 ? 's' : ''} recorded
+              </Text>
+              <Text style={[styles.drivesSub, { color: t.textMuted }]}>
+                {drivesKm.toFixed(1)} km · {(drivesKm * 0.621371).toFixed(1)} mi total
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={t.textMuted} />
+          </TouchableOpacity>
+        )}
+
+        {/* ── Recent receipts ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: t.textSubtle }]}>RECENT RECEIPTS</Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/stats')} hitSlop={12}>
+            <Text style={[styles.seeAll, { color: t.cta }]}>See all</Text>
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator color={t.cta} style={{ marginTop: 20 }} />
+        ) : recent.length === 0 ? (
+          <View style={[styles.emptyCard, { backgroundColor: t.surface, borderColor: t.border }]}>
+            <MaterialCommunityIcons name="receipt-text-outline" size={40} color={t.textSubtle} />
+            <Text style={[styles.emptyText, { color: t.textMuted }]}>No receipts yet</Text>
+            <TouchableOpacity
+              style={[styles.emptyBtn, { backgroundColor: t.cta }]}
+              onPress={() => router.push('/capture')}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="camera-plus" size={16} color="#fff" />
+              <Text style={styles.emptyBtnText}>Scan your first receipt</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={[styles.recentCard, { backgroundColor: t.surface, borderColor: t.border }]}>
+            {recent.map((r, i) => {
+              const isLast = i === recent.length - 1;
+              return (
+                <TouchableOpacity
+                  key={r.id}
+                  style={[
+                    styles.recentRow,
+                    !isLast && { borderBottomWidth: 1, borderBottomColor: t.border },
+                  ]}
+                  onPress={() => router.push(`/receipt/${r.id}`)}
+                  activeOpacity={0.7}
+                >
+                  <MerchantAvatar
+                    merchant={r.merchant}
+                    category={r.category}
+                    size={38}
+                    iconColor={t.cta}
+                    backgroundColor={t.cta + '18'}
+                    borderRadius={10}
+                  />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.recentMerchant, { color: t.textPrimary }]} numberOfLines={1}>
+                      {r.merchant || 'Unknown merchant'}
+                    </Text>
+                    <Text style={[styles.recentMeta, { color: t.textMuted }]}>
+                      {r.date} · {r.category}
+                    </Text>
+                  </View>
+                  <Text style={[styles.recentAmount, { color: t.textPrimary }]}>
+                    {(() => {
+                      try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: r.currency }).format(r.total); }
+                      catch { return `${r.currency} ${r.total.toFixed(2)}`; }
+                    })()}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  screen: { flex: 1 },
 
-  // Home banner — prominent failure notice (above the list)
-  homeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  homeBannerTitle: { fontFamily: 'Inter_700Bold', fontSize: 14, letterSpacing: -0.2 },
-  homeBannerBody: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2, lineHeight: 16 },
-
-  // Header
   header: {
-    paddingTop: 56,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    gap: 24,
-  },
-  // Select-mode header replaces normal header
-  selectHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
     paddingBottom: 16,
-    gap: 12,
   },
-  selectCount: {
-    flex: 1,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 17,
-    letterSpacing: -0.3,
-  },
-  selectDeleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
-    minHeight: 40,
-  },
-  selectDeleteText: {
-    color: '#fff',
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-  },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  brandMark: {
-    width: 32, height: 32, borderRadius: 9,
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandMark: { width: 30, height: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  brandName: { fontFamily: 'Inter_800ExtraBold', fontSize: 20, letterSpacing: -0.4 },
+  headerBtn: {
+    width: 38, height: 38, borderRadius: 12, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  brandName: {
-    fontFamily: 'Inter_800ExtraBold',
-    fontSize: 18,
-    letterSpacing: -0.3,
-  },
-  headerBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
-  headerLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  headerAmount: {
-    fontFamily: 'Inter_800ExtraBold',
-    fontSize: 36,
-    letterSpacing: -1,
-    lineHeight: 40,
-  },
-  scanBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 100,
-    minHeight: 44,
-  },
-  scanBtnText: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 14,
-    letterSpacing: -0.1,
-  },
-  scansLeft: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    marginTop: 6,
-  },
 
-  // Search
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 12,
-    marginVertical: 8,
-    paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
+  reviewBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 14, borderWidth: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    paddingVertical: 0,
-  },
+  reviewText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13 },
 
-  // Chips
-  chipRow: { paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
-  chip: {
+  financialsCard: {
+    marginHorizontal: 16, borderRadius: 20, padding: 22, marginBottom: 12,
+  },
+  financialsLabel: {
+    fontFamily: 'Inter_600SemiBold', fontSize: 11,
+    color: 'rgba(255,255,255,0.7)', letterSpacing: 1, marginBottom: 6,
+  },
+  financialsAmount: {
+    fontFamily: 'Inter_800ExtraBold', fontSize: 42,
+    color: '#fff', letterSpacing: -1.5, lineHeight: 48,
+  },
+  financialsSub: {
+    fontFamily: 'Inter_400Regular', fontSize: 13,
+    color: 'rgba(255,255,255,0.65)', marginBottom: 20,
+  },
+  financialsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    minHeight: 32,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 14, padding: 14,
   },
-  chipText: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  financialsStat: { flex: 1, alignItems: 'center' },
+  financialsStatValue: {
+    fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff', letterSpacing: -0.3,
+  },
+  financialsStatLabel: {
+    fontFamily: 'Inter_400Regular', fontSize: 10,
+    color: 'rgba(255,255,255,0.65)', marginTop: 3, textAlign: 'center',
+  },
+  financialsStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
 
-  // Receipt card
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    marginBottom: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    minHeight: 72,
+  limitPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    marginHorizontal: 16, marginBottom: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 14, borderWidth: 1,
   },
-  cardIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  cardMid: { flex: 1 },
-  cardMerchant: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    letterSpacing: -0.1,
-    marginBottom: 3,
-  },
-  cardMeta: { fontFamily: 'Inter_400Regular', fontSize: 12 },
-  cardAmount: {
-    fontFamily: 'Inter_800ExtraBold',
-    fontSize: 17,
-    marginLeft: 8,
-    letterSpacing: -0.3,
-  },
+  limitText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  limitUpgrade: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 
-  // Empty state
-  emptyContainer: { flex: 1 },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    padding: 40,
-    marginTop: 60,
+  sectionHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginHorizontal: 20, marginTop: 20, marginBottom: 10,
   },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  sectionTitle: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 0.8 },
+  seeAll: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+
+  quickRow: {
+    flexDirection: 'row', justifyContent: 'space-around',
+    paddingHorizontal: 12, marginBottom: 4,
   },
-  emptyTitle: {
-    fontFamily: 'Inter_700Bold',
-    fontSize: 20,
-    marginTop: 16,
-    letterSpacing: -0.3,
+  quickItem: { alignItems: 'center', gap: 8, width: 72 },
+  quickCircle: {
+    width: 60, height: 60, borderRadius: 30,
+    alignItems: 'center', justifyContent: 'center',
   },
-  emptyBody: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    marginTop: 6,
-    textAlign: 'center',
+  quickLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, textAlign: 'center' },
+
+  drivesCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 16, marginTop: 12, marginBottom: 4,
+    borderRadius: 16, borderWidth: 1, padding: 14,
   },
+  drivesIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  drivesTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  drivesSub: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
+
+  recentCard: {
+    marginHorizontal: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden',
+  },
+  recentRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  recentMerchant: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  recentMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
+  recentAmount: { fontFamily: 'Inter_700Bold', fontSize: 14, marginLeft: 8 },
+
+  emptyCard: {
+    marginHorizontal: 16, borderRadius: 16, borderWidth: 1,
+    alignItems: 'center', padding: 32, gap: 12,
+  },
+  emptyText: { fontFamily: 'Inter_400Regular', fontSize: 14 },
   emptyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: 30,
-    minHeight: 48,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14,
   },
-  emptyBtnText: { fontFamily: 'Inter_700Bold', fontSize: 15 },
+  emptyBtnText: { fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' },
 });

@@ -3,7 +3,6 @@ import { View, StyleSheet, TouchableOpacity, StatusBar, ScrollView, Dimensions, 
 import { SpringButton } from '../../src/components/SpringButton';
 import { Text } from 'react-native-paper';
 import { router } from 'expo-router';
-import { useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
@@ -21,7 +20,6 @@ export default function Onboarding() {
   const completeOnboarding = useAppStore((s) => s.completeOnboarding);
   const region = useAppStore((s) => s.region);
   const setRegion = useAppStore((s) => s.setRegion);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const scrollRef = useRef<ScrollView>(null);
 
   const stepIndex = STEP_ORDER.indexOf(step);
@@ -41,7 +39,8 @@ export default function Onboarding() {
 
   const goNext = async () => {
     if (step === 'permissions') {
-      if (!cameraPermission?.granted) await requestCameraPermission();
+      // Camera permission is requested by the document scanner when first used.
+      // Pre-request gallery access so the "Choose from Gallery" flow is instant.
       await ImagePicker.requestMediaLibraryPermissionsAsync();
     }
     if (isLast) {
@@ -60,11 +59,8 @@ export default function Onboarding() {
     const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
     const clamped = Math.max(0, Math.min(index, STEP_ORDER.length - 1));
     if (clamped !== stepIndex) {
-      // If the user swiped forward past the permissions step, trigger the
-      // permission request just as the CTA button would have.
       const leavingPermissions = STEP_ORDER[stepIndex] === 'permissions' && clamped > stepIndex;
       if (leavingPermissions) {
-        if (!cameraPermission?.granted) await requestCameraPermission();
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       }
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -146,7 +142,7 @@ export default function Onboarding() {
           <Text style={[styles.ctaText, { color: t.ctaText }]}>
             {step === 'welcome' && 'Get started'}
             {step === 'region' && 'Continue'}
-            {step === 'permissions' && (cameraPermission?.granted ? 'Continue' : 'Allow access')}
+            {step === 'permissions' && 'Allow access'}
             {step === 'free_tier' && 'Start scanning'}
           </Text>
         </SpringButton>

@@ -5,9 +5,8 @@
  * `useThemeTokens()` rather than hardcoding hex values, so the app supports
  * dark and light without per-screen `if (isDark)` branches.
  *
- * Palette: Indigo × Amber.
- * Indigo is the dominant 2026 fintech accent (Revolut, Wise family).
- * Amber CTA keeps the warm, unmissable action contrast.
+ * Palette: Corporate Blue.
+ * Deep blue primary — professional fintech feel (Xero, Wise, Revolut family).
  */
 
 import { useColorScheme } from 'react-native';
@@ -48,20 +47,20 @@ export interface SemanticTokens {
 }
 
 export const darkTokens: SemanticTokens = {
-  background: '#0d1117',
-  surface: '#1c2128',
-  surfaceElevated: '#262d36',
-  surfaceMuted: '#22282f',
-  border: '#2d343d',
+  background: '#0d0f14',
+  surface: '#161b27',
+  surfaceElevated: '#1e2535',
+  surfaceMuted: '#1a2030',
+  border: '#252d3d',
 
-  textPrimary: '#f0f4f9',
-  textMuted: '#a3acb8',
-  textSubtle: '#6e7682',
-  textInverse: '#0d1117',
+  textPrimary: '#f0f2f5',
+  textMuted: '#8b96a8',
+  textSubtle: '#4f5b6e',
+  textInverse: '#ffffff',
 
-  accent: '#818cf8',         // indigo-400
-  cta: '#f5a623',            // amber gold
-  ctaText: '#0d1117',
+  accent: '#60a5fa',         // blue-400
+  cta: '#2563eb',            // blue-600
+  ctaText: '#ffffff',
 
   success: '#34d399',
   successBg: 'rgba(52,211,153,0.14)',
@@ -77,20 +76,20 @@ export const darkTokens: SemanticTokens = {
 };
 
 export const lightTokens: SemanticTokens = {
-  background: '#fafaf7',
+  background: '#f0f2f5',
   surface: '#ffffff',
-  surfaceElevated: '#f5f5f3',
-  surfaceMuted: '#f0f0ed',
-  border: '#e5e5e2',
+  surfaceElevated: '#e8ecf2',
+  surfaceMuted: '#eef1f6',
+  border: '#dde2ea',
 
-  textPrimary: '#0a0a0a',
-  textMuted: '#5a5a5a',
-  textSubtle: '#8a8a8a',
+  textPrimary: '#0d1117',
+  textMuted: '#4a5568',
+  textSubtle: '#8b96a8',
   textInverse: '#ffffff',
 
-  accent: '#4f46e5',         // indigo-600 (WCAG AA on white)
-  cta: '#f5a623',
-  ctaText: '#0a0a0a',
+  accent: '#1d4ed8',         // blue-700
+  cta: '#2563eb',            // blue-600
+  ctaText: '#ffffff',
 
   success: '#15803d',
   successBg: '#dcfce7',

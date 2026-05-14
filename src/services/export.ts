@@ -65,8 +65,8 @@ function formatLineItemsForCSV(receipt: Receipt): string {
 export function generateCSV(receipts: Receipt[]): string {
   const headers = [
     'Date', 'Merchant', 'Category', 'Subtotal', 'Tax', 'Total',
-    'Currency', 'Payment Method', 'Tax Deductible',
-    'Line Items Count', 'Line Items', 'Notes',
+    'Currency', 'Payment Method', 'Tax Deductible', 'Reimbursable',
+    'Invoice Number', 'Line Items Count', 'Line Items', 'Notes',
   ];
   const rows = receipts.map((r) => [
     r.date,
@@ -78,6 +78,8 @@ export function generateCSV(receipts: Receipt[]): string {
     r.currency,
     r.payment_method ?? '',
     r.is_tax_deductible ? 'Yes' : 'No',
+    r.is_reimbursable ? 'Yes' : 'No',
+    r.invoice_number ?? '',
     String(r.line_items?.length ?? 0),
     `"${formatLineItemsForCSV(r).replace(/"/g, '""')}"`,
     `"${r.notes.replace(/"/g, '""')}"`,
@@ -99,19 +101,19 @@ export async function shareCSV(receipts: Receipt[], filename: string): Promise<v
 function pdfStyles(): string {
   return `
     body { font-family: -apple-system, Arial, sans-serif; font-size: 12px; color: #222; margin: 32px; }
-    h1 { color: #1a73e8; margin: 0 0 4px 0; font-size: 22px; }
+    h1 { color: #2563eb; margin: 0 0 4px 0; font-size: 22px; }
     h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; color: #444; }
     .subtitle { color: #666; margin-bottom: 18px; font-size: 13px; }
     .notes { background: #fffbe5; border-left: 3px solid #ffc107; padding: 10px 14px; margin: 8px 0 16px; font-size: 12px; color: #5c4400; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    th { background: #1a73e8; color: white; padding: 8px; text-align: left; font-size: 11px; }
+    th { background: #2563eb; color: white; padding: 8px; text-align: left; font-size: 11px; }
     td { padding: 6px 8px; border-bottom: 1px solid #eee; }
     tr:nth-child(even) td { background: #fafafa; }
     .summary-grid { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
     .summary-box { flex: 1; min-width: 140px; padding: 14px 18px; border-radius: 10px; }
     .summary-box .label { font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
     .summary-box .amount { font-size: 20px; font-weight: bold; margin-top: 4px; }
-    .blue-box { background: #1a73e8; color: white; }
+    .blue-box { background: #2563eb; color: white; }
     .green-box { background: #2e7d32; color: white; }
     .grey-box { background: #f5f5f5; color: #333; border: 1px solid #e0e0e0; }
     .ded-dot { color: #2e7d32; font-size: 12px; font-weight: bold; }

@@ -1,43 +1,76 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import type { SQLiteBindValue } from 'expo-sqlite';
 import { getDb } from './schema';
 import { Receipt, ReceiptDraft, ReceiptStatus, CATEGORY_DEDUCTIBLE_DEFAULTS, Category } from '../types';
 
 function rowToReceipt(row: any): Receipt {
   return {
     ...row,
-    line_items: JSON.parse(row.line_items || '[]'),
-    status: (row.status ?? 'complete') as ReceiptStatus,
+    line_items:        JSON.parse(row.line_items || '[]'),
+    additional_images: JSON.parse(row.additional_images || '[]'),
+    status:            (row.status ?? 'complete') as ReceiptStatus,
     is_tax_deductible: Boolean(row.is_tax_deductible),
-    invoice_number: row.invoice_number ?? null,
-    archived_at: row.archived_at ?? null,
+    is_reimbursable:   Boolean(row.is_reimbursable),
+    refund:            Boolean(row.refund),
+    invoice_number:    row.invoice_number ?? null,
+    category_id:       row.category_id ?? null,
+    report_id:         row.report_id ?? null,
+    archived_at:       row.archived_at ?? null,
+    deleted_at:        row.deleted_at ?? null,
+    updated_at:        row.updated_at ?? row.created_at,
   };
 }
 
 export async function insertReceipt(draft: ReceiptDraft): Promise<number> {
   const db = await getDb();
+  console.log('[insertReceipt] db handle present:', !!db);
   const status: ReceiptStatus = draft.status ?? 'complete';
   const deductible = draft.is_tax_deductible ?? CATEGORY_DEDUCTIBLE_DEFAULTS[draft.category as Category] ?? false;
-  const result = await db.runAsync(
-    `INSERT INTO receipts (merchant, date, currency, line_items, subtotal, tax, total, payment_method, invoice_number, category, notes, image_uri, status, is_tax_deductible)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      draft.merchant,
-      draft.date,
-      draft.currency,
-      JSON.stringify(draft.line_items),
-      draft.subtotal,
-      draft.tax,
-      draft.total,
-      draft.payment_method,
-      draft.invoice_number ?? null,
-      draft.category,
-      draft.notes,
-      draft.image_uri,
-      status,
-      deductible ? 1 : 0,
-    ]
-  );
-  return result.lastInsertRowId;
+
+  const sql = `INSERT INTO receipts
+       (merchant, date, currency, line_items, subtotal, tax, total,
+        payment_method, invoice_number, category, category_id, notes,
+        image_uri, additional_images, status, is_tax_deductible,
+        is_reimbursable, refund, report_id, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`;
+
+  const params: Array<[string, SQLiteBindValue]> = [
+    ['merchant',          draft.merchant],
+    ['date',              draft.date],
+    ['currency',          draft.currency],
+    ['line_items',        JSON.stringify(draft.line_items)],
+    ['subtotal',          draft.subtotal],
+    ['tax',               draft.tax],
+    ['total',             draft.total],
+    ['payment_method',    draft.payment_method ?? null],
+    ['invoice_number',    draft.invoice_number ?? null],
+    ['category',          draft.category],
+    ['category_id',       draft.category_id ?? null],
+    ['notes',             draft.notes],
+    ['image_uri',         draft.image_uri],
+    ['additional_images', JSON.stringify(draft.additional_images ?? [])],
+    ['status',            status],
+    ['is_tax_deductible', deductible ? 1 : 0],
+    ['is_reimbursable',   (draft.is_reimbursable ?? false) ? 1 : 0],
+    ['refund',            (draft.refund ?? false) ? 1 : 0],
+    ['report_id',         draft.report_id ?? null],
+  ];
+
+  console.log('[insertReceipt] SQL:', sql.replace(/\s+/g, ' ').trim());
+  for (const [name, value] of params) {
+    const t = value === null ? 'null' : value === undefined ? 'undefined' : typeof value;
+    const preview = typeof value === 'string' && value.length > 60 ? value.slice(0, 60) + '…' : value;
+    console.log(`[insertReceipt] param ${name} = ${JSON.stringify(preview)} (${t})`);
+  }
+
+  try {
+    const result = await db.runAsync(sql, params.map(([, v]) => v));
+    console.log('[insertReceipt] success, lastInsertRowId:', result.lastInsertRowId);
+    return result.lastInsertRowId;
+  } catch (err) {
+    console.error('[insertReceipt] FAILED', err);
+    throw err; // do not swallow — UI still surfaces it
+  }
 }
 
 /**
@@ -66,12 +99,13 @@ export async function recordExtractionFeedback(opts: {
 
 export async function updateReceipt(id: number, draft: Partial<ReceiptDraft>): Promise<void> {
   const db = await getDb();
-  // Coerce booleans to integers and objects to JSON.
+  const BOOL_COLS = new Set(['is_tax_deductible', 'is_reimbursable', 'refund']);
   const entries = Object.entries(draft).map(([k, v]) => {
-    if (k === 'is_tax_deductible') return [k, v ? 1 : 0];
+    if (BOOL_COLS.has(k)) return [k, v ? 1 : 0];
     if (typeof v === 'object' && v !== null) return [k, JSON.stringify(v)];
     return [k, v];
   });
+  entries.push(['updated_at', new Date().toISOString()]);
   const fields = entries.map(([k]) => `${k} = ?`).join(', ');
   const values = entries.map(([, v]) => v);
   await db.runAsync(`UPDATE receipts SET ${fields} WHERE id = ?`, [...values, id]);
@@ -136,6 +170,47 @@ export async function deleteReceipt(id: number): Promise<void> {
   return permanentlyDeleteReceipt(id);
 }
 
+/** Move to trash (soft delete). Separate from archive. */
+export async function trashReceipt(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE receipts SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`, [id]
+  );
+}
+
+/** Restore from trash. */
+export async function restoreFromTrash(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE receipts SET deleted_at = NULL, updated_at = datetime('now') WHERE id = ?`, [id]
+  );
+}
+
+/** All receipts in trash, newest first. */
+export async function getTrashedReceipts(): Promise<Receipt[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<any>(
+    `SELECT * FROM receipts WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC`
+  );
+  return rows.map(rowToReceipt);
+}
+
+/** Auto-purge receipts that have been in trash > 30 days. */
+export async function purgeOldTrash(): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ id: number; image_uri: string }>(
+    `SELECT id, image_uri FROM receipts
+     WHERE deleted_at IS NOT NULL
+       AND deleted_at < datetime('now', '-30 days')`
+  );
+  for (const row of rows) {
+    if (row.image_uri) {
+      try { await FileSystem.deleteAsync(row.image_uri, { idempotent: true }); } catch {}
+    }
+    await db.runAsync('DELETE FROM receipts WHERE id = ?', [row.id]);
+  }
+}
+
 export async function getArchivedReceipts(): Promise<Receipt[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<any>(
@@ -171,6 +246,9 @@ export async function getAllReceipts(opts?: {
   const db = await getDb();
   let query = 'SELECT * FROM receipts WHERE 1=1';
   const params: any[] = [];
+
+  // Always exclude trashed rows from main list
+  query += ' AND deleted_at IS NULL';
 
   if (!opts?.includeArchived) {
     query += ' AND archived_at IS NULL';

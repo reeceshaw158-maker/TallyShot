@@ -14,5 +14,12 @@
     ".expo/types/**/*.d.ts",
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
+  ],
+  "exclude": [
+    "_old",
+    "dist",
+    "node_modules",
+    "android",
+    "worker"
   ]
 }

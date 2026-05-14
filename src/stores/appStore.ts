@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules, Platform } from 'react-native';
+import * as Localization from 'expo-localization';
 import { REGION_PRESETS, Region, TaxMode } from '../types';
 
 /**
@@ -50,6 +50,13 @@ interface AppState {
   theme: 'light' | 'dark' | 'system';
   quickScan: boolean;
   region: Region;
+  /**
+   * True once the user has explicitly chosen a region (onboarding picker
+   * or Settings). While false, we re-detect from the device locale on
+   * each launch so a freshly installed app reflects the user's actual
+   * country instead of whatever the last default was.
+   */
+  regionExplicitlySet: boolean;
   taxMode: TaxMode;
   taxLabel: string;
   summaryMode: SummaryMode;
@@ -65,7 +72,8 @@ interface AppState {
   setQuickScan: (v: boolean) => void;
   /**
    * Set region from the picker. Auto-applies the region's currency and
-   * tax mode/label as defaults.
+   * tax mode/label as defaults, and marks the choice as user-explicit so
+   * we stop auto-detecting on subsequent launches.
    */
   setRegion: (region: Region) => void;
   setTaxMode: (mode: TaxMode) => void;
@@ -81,32 +89,51 @@ interface AppState {
 const currentYearMonth = () => new Date().toLocaleDateString('en-CA').slice(0, 7);
 
 /**
- * Best-effort device-locale → Region detection. Used only as the *initial*
- * default — the user picks their region during onboarding and can change it
- * any time in Settings.
+ * Best-effort device-locale → Region detection.
+ *
+ * Reads expo-localization (which exposes the OS region setting, not just
+ * the UI language) and falls back to currency / locale heuristics. Used
+ * both at first launch and on every subsequent launch while the user
+ * hasn't explicitly picked a region — that way a user in the UK whose
+ * device language is English (US) still gets GBP.
  */
 function detectRegionFromLocale(): Region {
-  let locale = '';
+  // 1. Primary signal: ISO 3166-1 region code from the device's region
+  //    setting (e.g. 'GB', 'US'). This is what we actually want.
   try {
-    if (Platform.OS === 'ios') {
-      locale =
-        NativeModules.SettingsManager?.settings?.AppleLocale ||
-        NativeModules.SettingsManager?.settings?.AppleLanguages?.[0] ||
-        '';
-    } else if (Platform.OS === 'android') {
-      locale = NativeModules.I18nManager?.localeIdentifier || '';
+    const locales = Localization.getLocales?.() ?? [];
+    for (const l of locales) {
+      const code = (l.regionCode || '').toUpperCase();
+      if (code === 'GB' || code === 'UK')           return 'GB';
+      if (code === 'AU')                            return 'AU';
+      if (code === 'NZ')                            return 'NZ';
+      if (code === 'US')                            return 'US';
+      if (code === 'CA')                            return 'CA';
+      if (['DE','FR','ES','IT','NL','PT','FI','SE','DK','PL','GR','IE','AT','BE','LU','CZ','SK','SI','HR','EE','LV','LT','CY','MT','BG','RO','HU'].includes(code))
+        return 'EU';
     }
-  } catch {
-    locale = '';
-  }
-  const code = locale.toLowerCase();
-  if (code.includes('gb') || code.includes('uk')) return 'GB';
-  if (code.includes('au')) return 'AU';
-  if (code.includes('nz')) return 'NZ';
-  if (code.includes('us')) return 'US';
-  if (code.includes('ca')) return 'CA';
-  if (/^(de|fr|es|it|nl|pt|fi|se|dk|pl|gr|ie|at|be)/.test(code)) return 'EU';
-  return 'GB'; // sensible default
+  } catch {}
+
+  // 2. Secondary signal: device currency (some devices report region '' but
+  //    still have a currency).
+  try {
+    const calendars = Localization.getCalendars?.();
+    // getCalendars doesn't expose currency directly — try locales[].currencyCode
+    const locales = Localization.getLocales?.() ?? [];
+    for (const l of locales) {
+      const cur = (l.currencyCode || '').toUpperCase();
+      if (cur === 'GBP') return 'GB';
+      if (cur === 'EUR') return 'EU';
+      if (cur === 'USD') return 'US';
+      if (cur === 'CAD') return 'CA';
+      if (cur === 'AUD') return 'AU';
+      if (cur === 'NZD') return 'NZ';
+    }
+    void calendars; // referenced to keep the inner block consistent
+  } catch {}
+
+  // 3. Last resort: fall through to 'other' so the user picks in onboarding.
+  return 'other';
 }
 
 const initialRegion = detectRegionFromLocale();
@@ -123,6 +150,7 @@ export const useAppStore = create<AppState>()(
       theme: 'dark',
       quickScan: false,
       region: initialRegion,
+      regionExplicitlySet: false,
       taxMode: initialPreset.taxMode,
       taxLabel: initialPreset.taxLabel,
       summaryMode: 'lineItems',
@@ -151,6 +179,7 @@ export const useAppStore = create<AppState>()(
         const preset = REGION_PRESETS[region];
         set({
           region,
+          regionExplicitlySet: true,
           currency: preset.currency,
           taxMode: preset.taxMode,
           taxLabel: preset.taxLabel,
@@ -170,6 +199,20 @@ export const useAppStore = create<AppState>()(
       // If the app restarts mid-5-second-window the receipt stays archived
       // (recoverable from Settings → Archived Receipts) — never silently lost.
       partialize: ({ pendingDeletion: _pd, ...rest }) => rest,
+      // On rehydrate, if the user never picked a region explicitly, re-run
+      // detection against the device locale. Fixes the "still on $ even
+      // though I live in the UK" case where a previous default got stuck.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (!state.regionExplicitlySet) {
+          const detected = detectRegionFromLocale();
+          const preset = REGION_PRESETS[detected];
+          state.region = detected;
+          state.currency = preset.currency;
+          state.taxMode = preset.taxMode;
+          state.taxLabel = preset.taxLabel;
+        }
+      },
     }
   )
 );

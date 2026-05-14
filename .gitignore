@@ -20,6 +20,10 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+metro.log
+
+# Local stash of pre-rewrite files — keep on disk, never commit
+_old/
 
 # debug
 npm-debug.*

@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { PaperProvider, MD3LightTheme, MD3DarkTheme, configureFonts } from 'react-native-paper';
-import { useColorScheme, View } from 'react-native';
+import { useColorScheme, View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useFonts,
   Inter_400Regular,
@@ -12,8 +14,10 @@ import {
 } from '@expo-google-fonts/inter';
 import { useAppStore } from '../src/stores/appStore';
 import { getDb } from '../src/db/schema';
+import { getSettings } from '../src/db/settings';
 import { darkTokens, lightTokens } from '../src/theme';
 import { initPurchases, getProStatus } from '../src/services/purchases';
+import { authenticate, isBiometricAvailable } from '../src/services/biometric';
 
 const fontConfig = {
   default: { fontFamily: 'Inter_400Regular', fontWeight: '400' as const },
@@ -95,15 +99,50 @@ export default function RootLayout() {
   const headerBg = paperTheme.colors.background;
   const headerText = paperTheme.colors.onBackground;
 
+  // ── Biometric lock ─────────────────────────────────────────────────────────
+  const [locked, setLocked] = useState(false);
+  const [biometricChecked, setBiometricChecked] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   useEffect(() => {
     getDb().catch(console.error);
     resetScanCountIfNewMonth();
-    // Initialise RevenueCat and refresh Pro status on every launch.
     initPurchases().then(() => getProStatus().then(setIsPro));
+
+    // Check biometric setting and lock if enabled
+    (async () => {
+      try {
+        const settings = await getSettings();
+        if (settings.biometric_enabled) {
+          const available = await isBiometricAvailable();
+          if (available) {
+            setLocked(true);
+            const result = await authenticate('Unlock TallyShot');
+            if (result.success) {
+              setLocked(false);
+            } else {
+              setAuthError('Authentication failed. Tap to try again.');
+            }
+          }
+        }
+      } catch {
+        // No biometric or error — let through
+      } finally {
+        setBiometricChecked(true);
+      }
+    })();
   }, []);
 
-  // Show a solid background while fonts load so the user never sees a
-  // raw white/black flash before the first frame renders.
+  const handleRetryAuth = async () => {
+    setAuthError(null);
+    const result = await authenticate('Unlock TallyShot');
+    if (result.success) {
+      setLocked(false);
+    } else {
+      setAuthError('Authentication failed. Tap to try again.');
+    }
+  };
+
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: headerBg }} />;
   }
@@ -122,13 +161,62 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="processing" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
-        <Stack.Screen name="review/[id]" options={{ title: 'Review Receipt' }} />
+        <Stack.Screen name="review/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="receipt/[id]" options={{ title: 'Receipt' }} />
+        <Stack.Screen name="report/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="export" options={{ title: 'Export' }} />
         <Stack.Screen name="preview" options={{ title: 'Preview' }} />
         <Stack.Screen name="archived" options={{ title: 'Archived Receipts' }} />
+        <Stack.Screen name="categories" options={{ headerShown: false }} />
+        <Stack.Screen name="reports" options={{ headerShown: false }} />
+        <Stack.Screen name="trash" options={{ headerShown: false }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
+
+      {/* Biometric lock overlay */}
+      {locked && biometricChecked && (
+        <View style={[lockStyles.overlay, { backgroundColor: colorScheme === 'dark' ? '#0d0f14' : '#f0f2f5' }]}>
+          <View style={[lockStyles.brandMark, { backgroundColor: colorScheme === 'dark' ? '#2563eb' : '#1d4ed8' }]}>
+            <MaterialCommunityIcons name="lock" size={32} color="#fff" />
+          </View>
+          <Text style={[lockStyles.title, { color: colorScheme === 'dark' ? '#fff' : '#111' }]}>
+            TallyShot is locked
+          </Text>
+          {authError && (
+            <Text style={lockStyles.error}>{authError}</Text>
+          )}
+          <TouchableOpacity
+            style={[lockStyles.btn, { backgroundColor: colorScheme === 'dark' ? '#2563eb' : '#1d4ed8' }]}
+            onPress={handleRetryAuth}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="fingerprint" size={20} color="#fff" />
+            <Text style={lockStyles.btnText}>Unlock</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </PaperProvider>
   );
 }
+
+const lockStyles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    zIndex: 9999,
+  },
+  brandMark: {
+    width: 80, height: 80, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 8,
+  },
+  title: { fontFamily: 'Inter_700Bold', fontSize: 22, letterSpacing: -0.4 },
+  error: { fontFamily: 'Inter_400Regular', fontSize: 14, color: '#ef4444', textAlign: 'center', paddingHorizontal: 32 },
+  btn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16,
+  },
+  btnText: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 16 },
+});

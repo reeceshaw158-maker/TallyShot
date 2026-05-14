@@ -1,35 +1,49 @@
-import { Tabs } from 'expo-router';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { Tabs, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeTokens } from '../../src/theme';
+import { Text } from 'react-native-paper';
+
+/** Raised brand-blue Scan FAB in the centre of the tab bar. */
+function CenterScanButton() {
+  const t = useThemeTokens();
+  return (
+    <TouchableOpacity
+      style={styles.fabWrap}
+      onPress={() => router.push('/capture')}
+      activeOpacity={0.85}
+    >
+      <View style={[styles.fab, { backgroundColor: t.cta }]}>
+        <MaterialCommunityIcons name="camera-plus" size={26} color="#fff" />
+      </View>
+      <Text style={[styles.fabLabel, { color: t.textMuted }]}>Scan</Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function TabLayout() {
   const t = useThemeTokens();
-  // On Samsung (and any Android with edgeToEdgeEnabled), the system navigation
-  // bar lives inside the app's drawing area. insets.bottom is the height of
-  // that bar (24–48 dp for button nav, 0 for full-gesture nav). We add it to
-  // both the tab bar height and its paddingBottom so the tab icons sit above
-  // the system gesture zone on every device.
   const insets = useSafeAreaInsets();
-  const TAB_BAR_CONTENT_HEIGHT = 64; // px above the system nav area
-  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+  const TAB_HEIGHT = 62;
+  const tabBarHeight = TAB_HEIGHT + insets.bottom;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: t.accent,
+        tabBarActiveTintColor: t.cta,
         tabBarInactiveTintColor: t.textMuted,
         tabBarStyle: {
           backgroundColor: t.surface,
           borderTopWidth: 1,
           borderTopColor: t.border,
           height: tabBarHeight,
-          paddingBottom: 8 + insets.bottom,
+          paddingBottom: 6 + insets.bottom,
           paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter_500Medium',
-          fontSize: 11,
+          fontSize: 10,
           letterSpacing: 0.2,
         },
         headerStyle: { backgroundColor: t.background },
@@ -40,6 +54,16 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Home',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
           title: 'Receipts',
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
@@ -47,26 +71,64 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Centre placeholder — the FAB floats above the bar */}
       <Tabs.Screen
-        name="stats"
+        name="capture-tab"
         options={{
-          title: 'Stats',
+          title: '',
+          tabBarLabel: () => null,
+          tabBarIcon: () => null,
+          tabBarButton: () => <CenterScanButton />,
+        }}
+        listeners={{ tabPress: (e) => { e.preventDefault(); router.push('/capture'); } }}
+      />
+      <Tabs.Screen
+        name="drives"
+        options={{
+          title: 'Drives',
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="chart-pie" size={size} color={color} />
+            <MaterialCommunityIcons name="car" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: 'More',
           headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" size={size} color={color} />
+            <MaterialCommunityIcons name="dots-horizontal-circle-outline" size={size} color={color} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  fabWrap: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: 72,
+    marginTop: -20,
+  },
+  fab: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  fabLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    marginTop: 3,
+    letterSpacing: 0.2,
+  },
+});

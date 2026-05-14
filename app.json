@@ -13,12 +13,13 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#110e38"
+      "backgroundColor": "#0d1f4e"
     },
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/0c2b8eda-a3a9-4b55-8564-b89c3176e0f6"
     },
     "ios": {
       "supportsTablet": false,
@@ -27,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#110e38"
+        "backgroundColor": "#0d1f4e"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tallyshot.app",
@@ -35,15 +36,12 @@
       "targetSdkVersion": 35,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.INTERNET",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.INTERNET"
       ],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
@@ -60,20 +58,29 @@
       "expo-font",
       "expo-updates",
       [
-        "expo-camera",
-        {
-          "cameraPermission": "TallyShot uses your camera to photograph receipts. Photos stay on your device.",
-          "recordAudioAndroid": false
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "TallyShot opens your photo picker only when you tap 'Choose from Gallery'. We never browse your library."
         }
       ],
       "expo-sharing",
-      "expo-system-ui"
+      "expo-system-ui",
+      "expo-local-authentication",
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "TallyShot needs camera access to scan receipts."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TallyShot uses the camera to read product barcodes. We only access it on the scanner screen.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,4 +1,5 @@
-export type Category =
+// ── Legacy text category (kept for backwards compat) ─────────────────────────
+export type CategoryName =
   | 'Food & Drink'
   | 'Travel'
   | 'Transport'
@@ -10,56 +11,67 @@ export type Category =
   | 'Shopping'
   | 'Other';
 
-export const CATEGORIES: Category[] = [
-  'Food & Drink',
-  'Travel',
-  'Transport',
-  'Accommodation',
-  'Office & Tech',
-  'Utilities',
-  'Healthcare',
-  'Entertainment',
-  'Shopping',
-  'Other',
+// Keep the old alias so existing code doesn't break
+export type Category = CategoryName;
+
+export const CATEGORIES: CategoryName[] = [
+  'Food & Drink', 'Travel', 'Transport', 'Accommodation',
+  'Office & Tech', 'Utilities', 'Healthcare', 'Entertainment',
+  'Shopping', 'Other',
 ];
 
-/**
- * Default tax-deductible status per category.
- * Used for new receipts and for backfilling existing rows during migration.
- * User can always override per-receipt.
- */
-export const CATEGORY_DEDUCTIBLE_DEFAULTS: Record<Category, boolean> = {
-  'Food & Drink': false,
-  'Travel': true,
-  'Transport': true,
+export const CATEGORY_DEDUCTIBLE_DEFAULTS: Record<CategoryName, boolean> = {
+  'Food & Drink':  false,
+  'Travel':        true,
+  'Transport':     true,
   'Accommodation': true,
   'Office & Tech': true,
-  'Utilities': false,
-  'Healthcare': false,
+  'Utilities':     false,
+  'Healthcare':    false,
   'Entertainment': false,
-  'Shopping': false,
-  'Other': false,
+  'Shopping':      false,
+  'Other':         false,
 };
 
-export interface LineItem {
-  description: string;
-  quantity: number;
-  unit_price: number;
-  total: number;
+// ── DB category entity (from categories table) ────────────────────────────────
+export interface DbCategory {
+  id: number;
+  name: string;
+  icon: string;
+  color: string;
+  tax_deductible: boolean;
+  is_default: boolean;
+  sort_order: number;
+  archived_at: string | null;
 }
 
-/**
- * Receipt lifecycle. v1 only ever stores `complete` or `needs_review`; the
- * other values are pre-baked so the UI status-pill component can extend
- * cleanly when:
- *   - v1.1 adds offline AI queueing → `pending` and `extracting` get used
- *   - v2 adds the submit workflow → `draft / submitted / approved / rejected`
- *     get used (Dext-style; receipts sent on to a manager or accountant)
- *
- * Designing the storage column + pill component for the full set now means
- * later releases don't require a migration or a component rewrite. The DB
- * schema column is plain TEXT so adding new values is type-only.
- */
+// ── Report ────────────────────────────────────────────────────────────────────
+export interface Report {
+  id: number;
+  name: string;
+  description: string;
+  advance_amount: number;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface ReportDraft {
+  name: string;
+  description: string;
+  advance_amount: number;
+}
+
+// ── App settings (mirrors settings table row) ─────────────────────────────────
+export interface AppSettings {
+  biometric_enabled: boolean;
+  mileage_rate: number;
+  home_currency: string;
+  distance_unit: 'mi' | 'km';
+  auto_track_drives: boolean;
+  updated_at: string;
+}
+
+// ── Receipt ───────────────────────────────────────────────────────────────────
 export type ReceiptStatus =
   | 'complete'
   | 'needs_review'
@@ -70,18 +82,7 @@ export type ReceiptStatus =
   | 'approved'
   | 'rejected';
 
-/**
- * Tax mode for receipt totals.
- *
- * - `inclusive`: total already contains tax (UK VAT, AU/NZ GST, most EU VAT).
- *   The Saldo Apps bug — adding tax on top of an already-inclusive total —
- *   is the most-cited 1★ complaint in the receipt-scanner category. We don't
- *   make that mistake.
- * - `exclusive`: total is pre-tax; tax is added on top (US sales tax,
- *   Canadian GST/PST in some provinces).
- */
 export type TaxMode = 'inclusive' | 'exclusive';
-
 export type Region = 'GB' | 'EU' | 'US' | 'AU' | 'NZ' | 'CA' | 'other';
 
 export interface RegionPreset {
@@ -99,10 +100,17 @@ export const REGION_PRESETS: Record<Region, RegionPreset> = {
   NZ:    { name: 'New Zealand',    flag: '🇳🇿', taxMode: 'inclusive', currency: 'NZD', taxLabel: 'GST' },
   US:    { name: 'United States',  flag: '🇺🇸', taxMode: 'exclusive', currency: 'USD', taxLabel: 'Sales tax' },
   CA:    { name: 'Canada',         flag: '🇨🇦', taxMode: 'exclusive', currency: 'CAD', taxLabel: 'Sales tax' },
-  other: { name: 'Other',          flag: '🌍', taxMode: 'inclusive', currency: 'GBP', taxLabel: 'Tax' },
+  other: { name: 'Other',          flag: '🌍',  taxMode: 'inclusive', currency: 'GBP', taxLabel: 'Tax' },
 };
 
 export const REGION_ORDER: Region[] = ['GB', 'EU', 'US', 'AU', 'NZ', 'CA', 'other'];
+
+export interface LineItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total: number;
+}
 
 export interface Receipt {
   id: number;
@@ -111,32 +119,35 @@ export interface Receipt {
   currency: string;
   line_items: LineItem[];
   subtotal: number;
+  /** VAT / sales tax amount */
   tax: number;
   total: number;
   payment_method: string | null;
-  /**
-   * Receipt or invoice number. Editable on every receipt — Dext shipped
-   * without this and got dragged in reviews ("can't fix typos in invoice
-   * number, have to delete and re-upload"). TallyShot makes everything
-   * tap-to-edit.
-   */
   invoice_number: string | null;
-  category: Category;
+  /** Legacy text category — use category_id for new code */
+  category: CategoryName;
+  /** FK to categories table — preferred for new code */
+  category_id: number | null;
   notes: string;
   image_uri: string;
+  /** JSON-encoded string[] of extra image URIs for multi-page receipts */
+  additional_images: string[];
   status: ReceiptStatus;
   is_tax_deductible: boolean;
-  /**
-   * Soft-delete timestamp. NULL = active receipt (visible in lists).
-   * Non-null = archived (hidden from default lists, viewable in Settings →
-   * Archived Receipts, restorable). Counters Dext's "no way to access
-   * archived receipts" review pattern. Permanent deletion is a separate
-   * step from the Archived screen.
-   */
+  is_reimbursable: boolean;
+  /** True if this is a refund / credit note */
+  refund: boolean;
+  /** Assigned report — null if unassigned */
+  report_id: number | null;
+  /** Archive timestamp — hidden from main list but not in trash */
   archived_at: string | null;
+  /** Soft-delete timestamp — in trash, auto-purged after 30 days */
+  deleted_at: string | null;
+  updated_at: string;
   created_at: string;
 }
 
-export interface ReceiptDraft extends Omit<Receipt, 'id' | 'created_at' | 'status' | 'archived_at'> {
+export interface ReceiptDraft
+  extends Omit<Receipt, 'id' | 'created_at' | 'updated_at' | 'status' | 'archived_at' | 'deleted_at'> {
   status?: ReceiptStatus;
 }

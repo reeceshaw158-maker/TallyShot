@@ -1,13 +1,16 @@
-import { View, ScrollView, StyleSheet, Alert, TouchableOpacity, StatusBar, Switch } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, TouchableOpacity, StatusBar, Switch, TextInput } from 'react-native';
 import { Text, ProgressBar } from 'react-native-paper';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
 import { clearAllUserData } from '../../src/db/receipts';
+import { getSettings, updateSettings } from '../../src/db/settings';
 import { useThemeTokens, SemanticTokens, useActiveScheme } from '../../src/theme';
 import { REGION_PRESETS, REGION_ORDER, Region, TaxMode } from '../../src/types';
 import { openManageSubscription } from '../../src/services/subscription';
+import { isBiometricAvailable } from '../../src/services/biometric';
 import { SummaryMode, PhotoMode } from '../../src/stores/appStore';
+import { useState, useEffect } from 'react';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'NZD', 'CAD', 'JPY'];
 const THEMES: { value: 'light' | 'dark' | 'system'; label: string; icon: string }[] = [
@@ -19,6 +22,40 @@ const THEMES: { value: 'light' | 'dark' | 'system'; label: string; icon: string 
 export default function SettingsScreen() {
   const t = useThemeTokens();
   const scheme = useActiveScheme();
+
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [mileageRate, setMileageRate] = useState('0.45');
+  const [distanceUnit, setDistanceUnit] = useState<'mi' | 'km'>('mi');
+
+  useEffect(() => {
+    Promise.all([getSettings(), isBiometricAvailable()]).then(([s, avail]) => {
+      setBiometricEnabled(s.biometric_enabled);
+      setBiometricAvailable(avail);
+      setMileageRate(String(s.mileage_rate));
+      setDistanceUnit(s.distance_unit);
+    });
+  }, []);
+
+  const handleBiometricToggle = async (value: boolean) => {
+    setBiometricEnabled(value);
+    await updateSettings({ biometric_enabled: value });
+  };
+
+  const handleMileageRateBlur = async () => {
+    const parsed = parseFloat(mileageRate);
+    if (!isNaN(parsed) && parsed > 0) {
+      await updateSettings({ mileage_rate: parsed });
+    } else {
+      setMileageRate('0.45');
+      await updateSettings({ mileage_rate: 0.45 });
+    }
+  };
+
+  const handleDistanceUnit = async (unit: 'mi' | 'km') => {
+    setDistanceUnit(unit);
+    await updateSettings({ distance_unit: unit });
+  };
 
   const isPro = useAppStore((s) => s.isPro);
   const scansUsedThisMonth = useAppStore((s) => s.scansUsedThisMonth);
@@ -279,6 +316,94 @@ export default function SettingsScreen() {
           />
         ))}
       </Section>
+
+      {/* Categories */}
+      <Section tokens={t}>
+        <NavRow
+          tokens={t}
+          icon="shape-outline"
+          title="Categories"
+          subtitle="Manage expense categories and tax rules"
+          onPress={() => router.push('/categories' as any)}
+        />
+      </Section>
+
+      {/* Reports */}
+      <Section tokens={t}>
+        <NavRow
+          tokens={t}
+          icon="folder-outline"
+          title="Reports"
+          subtitle="Group receipts into expense reports for reimbursement"
+          onPress={() => router.push('/reports' as any)}
+        />
+      </Section>
+
+      {/* Trash */}
+      <Section tokens={t}>
+        <NavRow
+          tokens={t}
+          icon="delete-outline"
+          title="Recently deleted"
+          subtitle="Receipts deleted in the last 30 days"
+          onPress={() => router.push('/trash' as any)}
+        />
+      </Section>
+
+      {/* Drives / Mileage */}
+      <Section tokens={t} title="DRIVES & MILEAGE">
+        {(['mi', 'km'] as const).map((u, i) => (
+          <OptionRow
+            key={u}
+            tokens={t}
+            icon={u === 'mi' ? 'flag' : 'earth'}
+            label={u === 'mi' ? 'Miles (UK / US)' : 'Kilometres'}
+            selected={distanceUnit === u}
+            onPress={() => handleDistanceUnit(u)}
+            isLast={i === 1}
+          />
+        ))}
+        <View style={[styles.divider, { backgroundColor: t.border }]} />
+        <View style={[styles.toggleRow, { paddingVertical: 14 }]}>
+          <View style={[styles.optionIcon, { backgroundColor: t.surfaceElevated }]}>
+            <MaterialCommunityIcons name="cash" size={18} color={t.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toggleTitle, { color: t.textPrimary }]}>HMRC mileage rate</Text>
+            <Text style={[styles.toggleSub, { color: t.textMuted }]}>Pence per mile (default 45p)</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <TextInput
+              value={mileageRate}
+              onChangeText={setMileageRate}
+              onBlur={handleMileageRateBlur}
+              keyboardType="decimal-pad"
+              style={{
+                fontFamily: 'Inter_600SemiBold', fontSize: 15,
+                color: t.textPrimary, textAlign: 'right',
+                minWidth: 48,
+                borderBottomWidth: 1, borderBottomColor: t.border,
+                paddingBottom: 2,
+              }}
+            />
+            <Text style={[styles.toggleSub, { color: t.textMuted }]}>p/mi</Text>
+          </View>
+        </View>
+      </Section>
+
+      {/* Security */}
+      {biometricAvailable && (
+        <Section tokens={t} title="SECURITY">
+          <ToggleRow
+            tokens={t}
+            icon="fingerprint"
+            title="Biometric lock"
+            subtitle="Require fingerprint or face unlock when opening the app."
+            value={biometricEnabled}
+            onValueChange={handleBiometricToggle}
+          />
+        </Section>
+      )}
 
       {/* Export */}
       <Section tokens={t}>

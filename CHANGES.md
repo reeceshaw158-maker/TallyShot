@@ -25,6 +25,22 @@ result screen was a shell waiting on Step 3. This slice fills it in:
   are detected via OFF's `categories_tags` and routed to the `not_grocery`
   screen instead of the nutrition card, which would be empty anyway.
 
+### UTC-date stragglers (Slice 9 M1 follow-up)
+The Slice 9 M1 fix swapped `toISOString().slice(0,10)` for
+`toLocaleDateString('en-CA')` so the device's local date is used. Five
+spots still had the old pattern and were silently misdating things for
+users not on UTC:
+
+- `app/review/[id].tsx` (×2) — the default `date` on a new receipt
+  could be yesterday for users east of UTC who scan around midnight.
+- `app/processing.tsx` — same issue on the "save as needs-review"
+  fallback path.
+- `app/export.tsx` — `ymd(new Date(y, m, 1))` produced the previous
+  day in UTC+ timezones, so the "This month" export range started on
+  the wrong date.
+- `app/report/[id].tsx` and `app/reports.tsx` — CSV filename suffix
+  (cosmetic, but still wrong on the device's clock).
+
 ### Drives screen — HMRC rate display bug
 `{rate * 100}p/mile` rendered as `45.000000000000006p/mile` on devices using
 the default 0.45 rate, because IEEE-754 has feelings about 0.45. Wrapped in

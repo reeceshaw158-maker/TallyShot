@@ -66,7 +66,7 @@ export default function ReviewScreen() {
 
   // ── Form state ───────────────────────────────────────────────────────────
   const [merchant, setMerchant] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA').slice(0, 10));
   const [total, setTotal] = useState('');
   const [subtotal, setSubtotal] = useState('');
   const [tax, setTax] = useState('');
@@ -118,7 +118,7 @@ export default function ReviewScreen() {
         const ex: ExtractionResult = JSON.parse(extraction);
         const legCat = (ex.suggested_category as Category) ?? 'Other';
         setMerchant(ex.merchant ?? '');
-        setDate(ex.date ?? new Date().toISOString().slice(0, 10));
+        setDate(ex.date ?? new Date().toLocaleDateString('en-CA').slice(0, 10));
         // Low-confidence: leave blank if zero (AI returns 0 when unsure)
         setTotal(ex.total > 0 ? String(ex.total) : '');
         setSubtotal(ex.subtotal > 0 ? String(ex.subtotal) : '');

@@ -77,7 +77,7 @@ export default function ReportDetailScreen() {
         ].join(','));
       }
       const csv = lines.join('\n');
-      const filename = `${(report.name ?? 'report').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filename = `${(report.name ?? 'report').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toLocaleDateString('en-CA')}.csv`;
       const path = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
       if (await Sharing.isAvailableAsync()) {

@@ -102,7 +102,7 @@ export default function ReportsScreen() {
       }
 
       const csv = lines.join('\n');
-      const filename = `${r.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const filename = `${r.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toLocaleDateString('en-CA')}.csv`;
       const path = `${FileSystem.cacheDirectory}${filename}`;
       await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
 

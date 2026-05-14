@@ -12,7 +12,12 @@ type Format = 'csv' | 'pdf';
 type Range = 'this_month' | 'last_month' | 'this_quarter' | 'this_year' | 'custom';
 
 function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Locale-canonical YYYY-MM-DD in the *device's* timezone. Using
+  // toISOString() here mis-dates the range for users east of UTC: e.g.
+  // new Date(2026, 4, 1) at UTC+8 becomes 2026-04-30 once converted to
+  // UTC, so "This month" started on the wrong day. 'en-CA' is the
+  // canonical ISO-formatted locale that every JS engine supports.
+  return d.toLocaleDateString('en-CA');
 }
 
 function rangeDates(r: Range): { from: string; to: string; label: string } {

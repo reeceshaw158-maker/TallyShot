@@ -109,7 +109,7 @@ export default function ProcessingScreen() {
     try {
       const draft: ReceiptDraft = {
         merchant: '',
-        date: new Date().toISOString().slice(0, 10),
+        date: new Date().toLocaleDateString('en-CA').slice(0, 10),
         currency,
         line_items: [],
         subtotal: 0,

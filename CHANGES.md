@@ -1,5 +1,38 @@
 # TallyShot changelog
 
+## Unreleased — Slice 11: Product barcode lookup (Step 3)
+
+### Open Food Facts integration is now live
+The barcode scanner used to dead-end on a "Looking up…" spinner because the
+result screen was a shell waiting on Step 3. This slice fills it in:
+
+- **`src/services/productCache.ts`** — new service. Cache-first
+  stale-while-revalidate lookup. Negative results (`not_found` / `not_grocery`)
+  are cached too so repeat scans of unknown barcodes don't keep hitting the
+  network. 8-second request timeout. Uses an honest `User-Agent` so OFF can
+  rate-limit politely without blocking everyone.
+- **`products` table** added to the schema. One row per barcode the user has
+  ever scanned, with the normalised OFF fields we actually render (name,
+  brand, image, Nutri-Score / Eco-Score / NOVA group, per-100g nutriments).
+- **`app/scan/result/[barcode].tsx`** rewritten. The shell now branches on
+  the real cache result: a Found state shows the hero card, three coloured
+  grade pills, and a UK-style per-100g nutrition table. Not-found offers a
+  one-tap deep link to OFF's "add a product" form so power users can
+  contribute the gap back.
+- **`ProductLookupOffline`** distinguishes offline from generic errors so
+  the empty-state copy can be tuned per cause — no silent failures.
+- **Phase 1 = groceries only.** Cleaning products / cosmetics / pet food
+  are detected via OFF's `categories_tags` and routed to the `not_grocery`
+  screen instead of the nutrition card, which would be empty anyway.
+
+### Drives screen — HMRC rate display bug
+`{rate * 100}p/mile` rendered as `45.000000000000006p/mile` on devices using
+the default 0.45 rate, because IEEE-754 has feelings about 0.45. Wrapped in
+`Math.round` (new `ratePence()` helper). Also nudged `MILES_TO_KM` from
+`1.60934` → `1.609344` for full HMRC-correct precision.
+
+---
+
 ## Unreleased — Slice 10: Smoothness pass
 
 ### S1 — Cold start white flash eliminated

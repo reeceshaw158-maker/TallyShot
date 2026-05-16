@@ -239,9 +239,9 @@ function CategoryRow({
         <Text style={[styles.catName, { color: tokens.textPrimary }]}>{cat.name}</Text>
         <View style={styles.badges}>
           {cat.tax_deductible && (
-            <View style={[styles.badge, { backgroundColor: '#10b98122' }]}>
-              <MaterialCommunityIcons name="check-circle-outline" size={10} color="#10b981" />
-              <Text style={[styles.badgeText, { color: '#10b981' }]}>Tax deductible</Text>
+            <View style={[styles.badge, { backgroundColor: tokens.successBg }]}>
+              <MaterialCommunityIcons name="check-circle-outline" size={10} color={tokens.success} />
+              <Text style={[styles.badgeText, { color: tokens.success }]}>Tax deductible</Text>
             </View>
           )}
           {!cat.is_default && (
@@ -307,9 +307,9 @@ function CategorySheet({
               {draft.name || 'Category name'}
             </Text>
             {draft.tax_deductible && (
-              <View style={[styles.badge, { backgroundColor: '#10b98122' }]}>
-                <MaterialCommunityIcons name="check-circle-outline" size={11} color="#10b981" />
-                <Text style={[styles.badgeText, { color: '#10b981' }]}>Tax deductible</Text>
+              <View style={[styles.badge, { backgroundColor: tokens.successBg }]}>
+                <MaterialCommunityIcons name="check-circle-outline" size={11} color={tokens.success} />
+                <Text style={[styles.badgeText, { color: tokens.success }]}>Tax deductible</Text>
               </View>
             )}
           </View>
@@ -330,15 +330,15 @@ function CategorySheet({
           <View style={[
             styles.toggleRow,
             { backgroundColor: tokens.surface, borderColor: tokens.border },
-            draft.tax_deductible && { borderColor: '#10b98155', backgroundColor: '#10b98110' },
+            draft.tax_deductible && { borderColor: tokens.success, backgroundColor: tokens.successBg },
           ]}>
             <MaterialCommunityIcons
               name="cash-multiple"
               size={20}
-              color={draft.tax_deductible ? '#10b981' : tokens.textMuted}
+              color={draft.tax_deductible ? tokens.success : tokens.textMuted}
             />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.toggleTitle, { color: draft.tax_deductible ? '#10b981' : tokens.textPrimary }]}>
+              <Text style={[styles.toggleTitle, { color: draft.tax_deductible ? tokens.success : tokens.textPrimary }]}>
                 Tax deductible
               </Text>
               <Text style={[styles.toggleSub, { color: tokens.textMuted }]}>
@@ -348,7 +348,7 @@ function CategorySheet({
             <Switch
               value={draft.tax_deductible}
               onValueChange={(v) => setDraft({ ...draft, tax_deductible: v })}
-              trackColor={{ false: tokens.surfaceElevated, true: '#10b981' }}
+              trackColor={{ false: tokens.surfaceElevated, true: tokens.success }}
               thumbColor="#fff"
             />
           </View>

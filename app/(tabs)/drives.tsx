@@ -116,8 +116,8 @@ export default function DrivesScreen() {
             {/* Header */}
             <View style={[styles.header, { paddingTop: 52 + insets.top }]}>
               <View style={styles.headerTop}>
-                <View style={[styles.headerIcon, { backgroundColor: '#3b82f620' }]}>
-                  <MaterialCommunityIcons name="car" size={22} color="#3b82f6" />
+                <View style={[styles.headerIcon, { backgroundColor: t.cta + '22' }]}>
+                  <MaterialCommunityIcons name="car" size={22} color={t.cta} />
                 </View>
                 <View>
                   <Text style={[styles.headerTitle, { color: t.textPrimary }]}>Drives</Text>
@@ -128,25 +128,25 @@ export default function DrivesScreen() {
               </View>
             </View>
 
-            {/* Summary card */}
-            <View style={[styles.summaryCard, { backgroundColor: '#3b82f6' }]}>
-              <View style={styles.summaryRow}>
+            {/* Summary card — dark surface with green accent on allowance */}
+            <View style={[styles.summaryCard, { backgroundColor: t.surface, borderColor: t.border }]}>
+              <View style={[styles.summaryRow, { backgroundColor: t.background, borderColor: t.border }]}>
                 <View style={styles.summaryStat}>
-                  <Text style={styles.summaryValue}>{fmtDist(summary.totalKm)}</Text>
-                  <Text style={styles.summaryLabel}>Total Distance</Text>
+                  <Text style={[styles.summaryValue, { color: t.textPrimary }]}>{fmtDist(summary.totalKm)}</Text>
+                  <Text style={[styles.summaryLabel, { color: t.textMuted }]}>Total Distance</Text>
                 </View>
-                <View style={styles.summaryDivider} />
+                <View style={[styles.summaryDivider, { backgroundColor: t.border }]} />
                 <View style={styles.summaryStat}>
-                  <Text style={styles.summaryValue}>{summary.count}</Text>
-                  <Text style={styles.summaryLabel}>Trips</Text>
+                  <Text style={[styles.summaryValue, { color: t.textPrimary }]}>{summary.count}</Text>
+                  <Text style={[styles.summaryLabel, { color: t.textMuted }]}>Trips</Text>
                 </View>
-                <View style={styles.summaryDivider} />
+                <View style={[styles.summaryDivider, { backgroundColor: t.border }]} />
                 <View style={styles.summaryStat}>
-                  <Text style={styles.summaryValue}>{fmtAllowance(summary.totalKm)}</Text>
-                  <Text style={styles.summaryLabel}>HMRC Allowance</Text>
+                  <Text style={[styles.summaryValue, { color: t.cta }]}>{fmtAllowance(summary.totalKm)}</Text>
+                  <Text style={[styles.summaryLabel, { color: t.textMuted }]}>HMRC Allowance</Text>
                 </View>
               </View>
-              <Text style={styles.summaryNote}>
+              <Text style={[styles.summaryNote, { color: t.textMuted }]}>
                 At {ratePence(rate)}p/mile (HMRC {new Date().getFullYear()} rate)
               </Text>
             </View>
@@ -192,9 +192,9 @@ export default function DrivesScreen() {
                 />
                 {/* Live allowance preview */}
                 {parseFloat(manualDist) > 0 && (
-                  <View style={[styles.previewRow, { backgroundColor: '#dcfce7', borderRadius: 10 }]}>
-                    <MaterialCommunityIcons name="cash" size={16} color="#15803d" />
-                    <Text style={[styles.previewText, { color: '#15803d' }]}>
+                  <View style={[styles.previewRow, { backgroundColor: t.successBg, borderRadius: 10 }]}>
+                    <MaterialCommunityIcons name="cash" size={16} color={t.success} />
+                    <Text style={[styles.previewText, { color: t.success }]}>
                       HMRC allowance: {fmtAllowance(toKm(parseFloat(manualDist)))}
                     </Text>
                   </View>
@@ -205,8 +205,8 @@ export default function DrivesScreen() {
                   disabled={saving}
                   activeOpacity={0.85}
                 >
-                  <MaterialCommunityIcons name="check" size={18} color="#fff" />
-                  <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save drive'}</Text>
+                  <MaterialCommunityIcons name="check" size={18} color={t.ctaText} />
+                  <Text style={[styles.saveBtnText, { color: t.ctaText }]}>{saving ? 'Saving…' : 'Save drive'}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -232,8 +232,8 @@ export default function DrivesScreen() {
             delayLongPress={400}
             activeOpacity={0.85}
           >
-            <View style={[styles.driveIcon, { backgroundColor: '#3b82f620' }]}>
-              <MaterialCommunityIcons name="car" size={20} color="#3b82f6" />
+            <View style={[styles.driveIcon, { backgroundColor: t.cta + '22' }]}>
+              <MaterialCommunityIcons name="car" size={20} color={t.cta} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.driveKm, { color: t.textPrimary }]}>{fmtDist(item.distance_km)}</Text>
@@ -247,7 +247,7 @@ export default function DrivesScreen() {
               ) : null}
             </View>
             <View style={styles.driveRight}>
-              <Text style={[styles.driveAllowance, { color: '#15803d' }]}>{fmtAllowance(item.distance_km)}</Text>
+              <Text style={[styles.driveAllowance, { color: t.success }]}>{fmtAllowance(item.distance_km)}</Text>
               <Text style={[styles.driveMiles, { color: t.textSubtle }]}>long-press to delete</Text>
             </View>
           </TouchableOpacity>
@@ -266,13 +266,13 @@ const styles = StyleSheet.create({
   headerTitle: { fontFamily: 'Inter_800ExtraBold', fontSize: 28, letterSpacing: -0.8 },
   headerSub: { fontFamily: 'Inter_400Regular', fontSize: 13, marginTop: 2 },
 
-  summaryCard: { marginHorizontal: 16, marginBottom: 12, borderRadius: 18, padding: 20 },
-  summaryRow: { flexDirection: 'row', alignItems: 'center' },
+  summaryCard: { marginHorizontal: 16, marginBottom: 12, borderRadius: 18, padding: 18, borderWidth: 1 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, borderWidth: 1 },
   summaryStat: { flex: 1, alignItems: 'center' },
-  summaryValue: { fontFamily: 'Inter_800ExtraBold', fontSize: 20, color: '#fff', letterSpacing: -0.5 },
-  summaryLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2, textAlign: 'center' },
-  summaryDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.25)' },
-  summaryNote: { fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.6)', textAlign: 'center', marginTop: 10 },
+  summaryValue: { fontFamily: 'Inter_800ExtraBold', fontSize: 18, letterSpacing: -0.5 },
+  summaryLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, marginTop: 3, textAlign: 'center' },
+  summaryDivider: { width: 1, height: 36 },
+  summaryNote: { fontFamily: 'Inter_400Regular', fontSize: 11, textAlign: 'center', marginTop: 10 },
 
   addBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, borderRadius: 12, paddingVertical: 12,
   },
-  saveBtnText: { fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' },
+  saveBtnText: { fontFamily: 'Inter_700Bold', fontSize: 14 },
 
   listLabel: {
     fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 0.8,

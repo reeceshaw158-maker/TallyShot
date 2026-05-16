@@ -203,7 +203,7 @@ export default function ReceiptsScreen() {
           <TouchableOpacity
             onPress={handleBulkDelete}
             disabled={selectedIds.size === 0}
-            style={[styles.deleteBtn, { backgroundColor: selectedIds.size === 0 ? '#f8717144' : '#f87171' }]}
+            style={[styles.deleteBtn, { backgroundColor: selectedIds.size === 0 ? t.danger + '55' : t.danger }]}
           >
             <MaterialCommunityIcons name="delete-outline" size={18} color="#fff" />
             <Text style={styles.deleteBtnText}>Delete</Text>
@@ -338,7 +338,7 @@ export default function ReceiptsScreen() {
                   style={[
                     styles.card,
                     { backgroundColor: t.surface, borderColor: t.border },
-                    isNeedsReview && { borderColor: '#fbbf24', borderWidth: 1.5 },
+                    isNeedsReview && { borderColor: t.warning, borderWidth: 1.5 },
                     isSelected && { borderColor: t.cta, borderWidth: 1.5, backgroundColor: t.cta + '14' },
                   ]}
                   onPress={() => selectMode ? toggleSelect(item.id) : router.push(`/receipt/${item.id}`)}
@@ -356,8 +356,8 @@ export default function ReceiptsScreen() {
                     />
                   )}
                   {isNeedsReview ? (
-                    <View style={[styles.cardIcon, { backgroundColor: '#fef3c7' }]}>
-                      <MaterialCommunityIcons name="alert-circle-outline" size={22} color="#b45309" />
+                    <View style={[styles.cardIcon, { backgroundColor: t.warningBg }]}>
+                      <MaterialCommunityIcons name="alert-circle-outline" size={22} color={t.warning} />
                     </View>
                   ) : (
                     <MerchantAvatar
@@ -376,9 +376,9 @@ export default function ReceiptsScreen() {
                     {!isNeedsReview && (item.is_tax_deductible || item.is_reimbursable || item.refund) && (
                       <View style={{ flexDirection: 'row', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
                         {item.is_tax_deductible && (
-                          <View style={[styles.badge, { backgroundColor: '#dcfce7' }]}>
-                            <MaterialCommunityIcons name="check-circle" size={10} color="#15803d" />
-                            <Text style={[styles.badgeText, { color: '#15803d' }]}>Deductible</Text>
+                          <View style={[styles.badge, { backgroundColor: t.successBg }]}>
+                            <MaterialCommunityIcons name="check-circle" size={10} color={t.success} />
+                            <Text style={[styles.badgeText, { color: t.success }]}>Deductible</Text>
                           </View>
                         )}
                         {item.is_reimbursable && (
@@ -388,9 +388,9 @@ export default function ReceiptsScreen() {
                           </View>
                         )}
                         {item.refund && (
-                          <View style={[styles.badge, { backgroundColor: '#fef3c7' }]}>
-                            <MaterialCommunityIcons name="cash-refund" size={10} color="#b45309" />
-                            <Text style={[styles.badgeText, { color: '#b45309' }]}>Refund</Text>
+                          <View style={[styles.badge, { backgroundColor: t.warningBg }]}>
+                            <MaterialCommunityIcons name="cash-refund" size={10} color={t.warning} />
+                            <Text style={[styles.badgeText, { color: t.warning }]}>Refund</Text>
                           </View>
                         )}
                       </View>
@@ -471,7 +471,7 @@ function FilterSheet({ visible, current, categories, needsReviewCount, tokens: t
           {/* Preset filters */}
           {presets.map((p) => {
             const active = isActive(p.filter);
-            const tintColor = p.tinted ? '#b45309' : t.accent;
+            const tintColor = p.tinted ? t.warning : t.accent;
             return (
               <TouchableOpacity
                 key={p.label}
@@ -515,7 +515,7 @@ function FilterSheet({ visible, current, categories, needsReviewCount, tokens: t
                     </View>
                     <Text style={[styles.filterOptionLabel, { color: active ? cat.color : t.textPrimary }]}>{cat.name}</Text>
                     {cat.tax_deductible ? (
-                      <MaterialCommunityIcons name="check-decagram" size={14} color="#15803d" style={{ marginRight: 4 }} />
+                      <MaterialCommunityIcons name="check-decagram" size={14} color={t.success} style={{ marginRight: 4 }} />
                     ) : null}
                     {active && <MaterialCommunityIcons name="check" size={18} color={cat.color} />}
                   </TouchableOpacity>

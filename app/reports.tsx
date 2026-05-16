@@ -246,12 +246,12 @@ function ReportCard({
           <Text style={[styles.actionPillText, { color: t.cta }]}>Export CSV</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionPill, { backgroundColor: '#ef444418' }]}
+          style={[styles.actionPill, { backgroundColor: t.dangerBg }]}
           onPress={onArchive}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="archive-outline" size={14} color="#ef4444" />
-          <Text style={[styles.actionPillText, { color: '#ef4444' }]}>Archive</Text>
+          <MaterialCommunityIcons name="archive-outline" size={14} color={t.danger} />
+          <Text style={[styles.actionPillText, { color: t.danger }]}>Archive</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>

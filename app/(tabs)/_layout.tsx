@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeTokens } from '../../src/theme';
 import { Text } from 'react-native-paper';
 
-/** Raised brand-blue Scan FAB in the centre of the tab bar. */
+/** Raised vibrant-green Scan FAB in the centre of the tab bar. */
 function CenterScanButton() {
   const t = useThemeTokens();
   return (
@@ -14,8 +14,8 @@ function CenterScanButton() {
       onPress={() => router.push('/capture')}
       activeOpacity={0.85}
     >
-      <View style={[styles.fab, { backgroundColor: t.cta }]}>
-        <MaterialCommunityIcons name="camera-plus" size={26} color="#fff" />
+      <View style={[styles.fab, { backgroundColor: t.cta, shadowColor: t.cta }]}>
+        <MaterialCommunityIcons name="camera-plus" size={26} color={t.ctaText} />
       </View>
       <Text style={[styles.fabLabel, { color: t.textMuted }]}>Scan</Text>
     </TouchableOpacity>
@@ -34,7 +34,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: t.cta,
         tabBarInactiveTintColor: t.textMuted,
         tabBarStyle: {
-          backgroundColor: t.surface,
+          // Tab bar matches the page background per the new design spec, with a
+          // single hairline divider at the top to delineate it from content.
+          backgroundColor: t.background,
           borderTopWidth: 1,
           borderTopColor: t.border,
           height: tabBarHeight,
@@ -119,7 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#2563eb',
+    // shadowColor is overridden inline so it tracks the live theme cta.
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.45,
     shadowRadius: 10,

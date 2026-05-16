@@ -71,27 +71,13 @@ export default function DashboardScreen() {
 
   const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
+  // All quick actions use the primary green accent on a dark surface — brief
+  // spec: "#1A1A1A background with #00C896 icons". Consistency over variety.
   const quickActions = [
-    {
-      icon: 'camera-plus', label: 'Scan',
-      color: t.cta, bg: t.cta + '20',
-      onPress: () => router.push('/capture'),
-    },
-    {
-      icon: 'car', label: 'Add Drive',
-      color: '#3b82f6', bg: '#3b82f620',
-      onPress: () => router.push('/(tabs)/drives'),
-    },
-    {
-      icon: 'folder-outline', label: 'Reports',
-      color: '#8b5cf6', bg: '#8b5cf620',
-      onPress: () => router.push('/reports' as any),
-    },
-    {
-      icon: 'export-variant', label: 'Export',
-      color: '#6b7280', bg: '#6b728020',
-      onPress: () => router.push('/export'),
-    },
+    { icon: 'camera-plus', label: 'Scan',      onPress: () => router.push('/capture') },
+    { icon: 'car',         label: 'Add Drive', onPress: () => router.push('/(tabs)/drives') },
+    { icon: 'folder-outline', label: 'Reports', onPress: () => router.push('/reports' as any) },
+    { icon: 'export-variant', label: 'Export',  onPress: () => router.push('/export') },
   ];
 
   return (
@@ -106,7 +92,7 @@ export default function DashboardScreen() {
         <View style={[styles.header, { paddingTop: 52 + insets.top }]}>
           <View style={styles.headerLeft}>
             <View style={[styles.brandMark, { backgroundColor: t.cta }]}>
-              <MaterialCommunityIcons name="receipt" size={18} color="#fff" />
+              <MaterialCommunityIcons name="receipt" size={18} color={t.ctaText} />
             </View>
             <Text style={[styles.brandName, { color: t.textPrimary }]}>TallyShot</Text>
           </View>
@@ -118,53 +104,62 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Needs Review banner ── */}
+        {/* ── Needs Review banner ── (left accent border per design spec) */}
         {needsReview > 0 && (
           <TouchableOpacity
-            style={[styles.reviewBanner, { backgroundColor: '#fef3c7', borderColor: '#fbbf24' }]}
+            style={[
+              styles.reviewBanner,
+              { backgroundColor: t.surface, borderLeftColor: t.warning, borderColor: t.border },
+            ]}
             onPress={() => router.push('/(tabs)/stats')}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="alert-circle" size={18} color="#b45309" />
-            <Text style={[styles.reviewText, { color: '#b45309' }]}>
+            <MaterialCommunityIcons name="alert-circle" size={18} color={t.warning} />
+            <Text style={[styles.reviewText, { color: t.textPrimary }]}>
               {needsReview} receipt{needsReview !== 1 ? 's' : ''} need review — tap to fix
             </Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color="#b45309" />
+            <MaterialCommunityIcons name="chevron-right" size={18} color={t.textMuted} />
           </TouchableOpacity>
         )}
 
-        {/* ── Financials card ── */}
-        <View style={[styles.financialsCard, { backgroundColor: t.cta }]}>
-          <Text style={styles.financialsLabel}>{monthLabel.toUpperCase()}</Text>
-          <Text style={styles.financialsAmount}>{fmt(monthTotal)}</Text>
-          <Text style={styles.financialsSub}>Total expenses</Text>
-          <View style={styles.financialsRow}>
+        {/* ── Financials card ──
+            Dark card with green accent highlights on the amount + stat values.
+            Stats row separated by #2A2A2A dividers (border token). */}
+        <View style={[styles.financialsCard, { backgroundColor: t.surface, borderColor: t.border }]}>
+          <Text style={[styles.financialsLabel, { color: t.textMuted }]}>{monthLabel.toUpperCase()}</Text>
+          <Text style={[styles.financialsAmount, { color: t.textPrimary }]}>{fmt(monthTotal)}</Text>
+          <Text style={[styles.financialsSub, { color: t.textMuted }]}>Total expenses</Text>
+          <View style={[styles.financialsRow, { backgroundColor: t.background, borderColor: t.border }]}>
             <View style={styles.financialsStat}>
-              <Text style={styles.financialsStatValue}>{fmt(deductibleTotal)}</Text>
-              <Text style={styles.financialsStatLabel}>Tax Deductible</Text>
+              <Text style={[styles.financialsStatValue, { color: t.cta }]}>{fmt(deductibleTotal)}</Text>
+              <Text style={[styles.financialsStatLabel, { color: t.textMuted }]}>Tax Deductible</Text>
             </View>
-            <View style={styles.financialsStatDivider} />
+            <View style={[styles.financialsStatDivider, { backgroundColor: t.border }]} />
             <View style={styles.financialsStat}>
-              <Text style={styles.financialsStatValue}>{receiptCount}</Text>
-              <Text style={styles.financialsStatLabel}>Receipts</Text>
+              <Text style={[styles.financialsStatValue, { color: t.textPrimary }]}>{receiptCount}</Text>
+              <Text style={[styles.financialsStatLabel, { color: t.textMuted }]}>Receipts</Text>
             </View>
-            <View style={styles.financialsStatDivider} />
+            <View style={[styles.financialsStatDivider, { backgroundColor: t.border }]} />
             <View style={styles.financialsStat}>
-              <Text style={styles.financialsStatValue}>{drivesCount}</Text>
-              <Text style={styles.financialsStatLabel}>Drives</Text>
+              <Text style={[styles.financialsStatValue, { color: t.textPrimary }]}>{drivesCount}</Text>
+              <Text style={[styles.financialsStatLabel, { color: t.textMuted }]}>Drives</Text>
             </View>
           </View>
         </View>
 
-        {/* ── Scan limit pill (free users) ── */}
+        {/* ── Scan limit banner (free users) ──
+            Left green accent border, dark card body — visually distinct as required. */}
         {!isPro && (
           <TouchableOpacity
-            style={[styles.limitPill, { backgroundColor: t.surface, borderColor: t.border }]}
+            style={[
+              styles.limitPill,
+              { backgroundColor: t.surface, borderLeftColor: t.cta, borderColor: t.border },
+            ]}
             onPress={() => router.push('/paywall')}
             activeOpacity={0.85}
           >
             <MaterialCommunityIcons name="crown" size={14} color={t.cta} />
-            <Text style={[styles.limitText, { color: t.textMuted }]}>
+            <Text style={[styles.limitText, { color: t.textPrimary }]}>
               {scansLeft} free AI scans left this month
             </Text>
             <Text style={[styles.limitUpgrade, { color: t.cta }]}>Upgrade →</Text>
@@ -181,10 +176,10 @@ export default function DashboardScreen() {
               key={a.label}
               style={styles.quickItem}
               onPress={a.onPress}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={[styles.quickCircle, { backgroundColor: a.bg }]}>
-                <MaterialCommunityIcons name={a.icon as any} size={24} color={a.color} />
+              <View style={[styles.quickCircle, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <MaterialCommunityIcons name={a.icon as any} size={24} color={t.cta} />
               </View>
               <Text style={[styles.quickLabel, { color: t.textMuted }]}>{a.label}</Text>
             </TouchableOpacity>
@@ -198,8 +193,8 @@ export default function DashboardScreen() {
             onPress={() => router.push('/(tabs)/drives')}
             activeOpacity={0.85}
           >
-            <View style={[styles.drivesIcon, { backgroundColor: '#3b82f620' }]}>
-              <MaterialCommunityIcons name="car" size={22} color="#3b82f6" />
+            <View style={[styles.drivesIcon, { backgroundColor: t.cta + '22' }]}>
+              <MaterialCommunityIcons name="car" size={22} color={t.cta} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.drivesTitle, { color: t.textPrimary }]}>
@@ -232,8 +227,8 @@ export default function DashboardScreen() {
               onPress={() => router.push('/capture')}
               activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="camera-plus" size={16} color="#fff" />
-              <Text style={styles.emptyBtnText}>Scan your first receipt</Text>
+              <MaterialCommunityIcons name="camera-plus" size={16} color={t.ctaText} />
+              <Text style={[styles.emptyBtnText, { color: t.ctaText }]}>Scan your first receipt</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -301,48 +296,47 @@ const styles = StyleSheet.create({
   },
 
   reviewBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     marginHorizontal: 16, marginBottom: 12,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: 14, borderWidth: 1, borderLeftWidth: 4,
   },
   reviewText: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13 },
 
   financialsCard: {
     marginHorizontal: 16, borderRadius: 20, padding: 22, marginBottom: 12,
+    borderWidth: 1,
   },
   financialsLabel: {
     fontFamily: 'Inter_600SemiBold', fontSize: 11,
-    color: 'rgba(255,255,255,0.7)', letterSpacing: 1, marginBottom: 6,
+    letterSpacing: 1, marginBottom: 6,
   },
   financialsAmount: {
     fontFamily: 'Inter_800ExtraBold', fontSize: 42,
-    color: '#fff', letterSpacing: -1.5, lineHeight: 48,
+    letterSpacing: -1.5, lineHeight: 48,
   },
   financialsSub: {
     fontFamily: 'Inter_400Regular', fontSize: 13,
-    color: 'rgba(255,255,255,0.65)', marginBottom: 20,
+    marginBottom: 20,
   },
   financialsRow: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 14, padding: 14,
+    flexDirection: 'row', borderRadius: 14, padding: 14, borderWidth: 1,
   },
   financialsStat: { flex: 1, alignItems: 'center' },
   financialsStatValue: {
-    fontFamily: 'Inter_700Bold', fontSize: 16, color: '#fff', letterSpacing: -0.3,
+    fontFamily: 'Inter_700Bold', fontSize: 16, letterSpacing: -0.3,
   },
   financialsStatLabel: {
     fontFamily: 'Inter_400Regular', fontSize: 10,
-    color: 'rgba(255,255,255,0.65)', marginTop: 3, textAlign: 'center',
+    marginTop: 3, textAlign: 'center',
   },
-  financialsStatDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)' },
+  financialsStatDivider: { width: 1 },
 
   limitPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     marginHorizontal: 16, marginBottom: 12,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 14, borderWidth: 1,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderRadius: 14, borderWidth: 1, borderLeftWidth: 4,
   },
   limitText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13 },
   limitUpgrade: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
@@ -359,8 +353,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, marginBottom: 4,
   },
   quickItem: { alignItems: 'center', gap: 8, width: 72 },
+  // Quick action: dark square card per spec, green icon.
   quickCircle: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 60, height: 60, borderRadius: 16, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
   quickLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, textAlign: 'center' },
@@ -394,5 +389,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14,
   },
-  emptyBtnText: { fontFamily: 'Inter_700Bold', fontSize: 14, color: '#fff' },
+  emptyBtnText: { fontFamily: 'Inter_700Bold', fontSize: 14 },
 });

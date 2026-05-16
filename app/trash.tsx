@@ -103,7 +103,7 @@ export default function TrashScreen() {
         <Text style={[styles.pageTitle, { color: t.textPrimary }]}>Recently Deleted</Text>
         {receipts.length > 0 && (
           <TouchableOpacity onPress={handleEmptyTrash} hitSlop={8}>
-            <Text style={[styles.emptyBtn, { color: t.danger ?? '#ef4444' }]}>Empty</Text>
+            <Text style={[styles.emptyBtn, { color: t.danger ?? t.danger }]}>Empty</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -154,7 +154,7 @@ export default function TrashScreen() {
                   <Text style={[styles.cardMeta, { color: t.textMuted }]}>
                     {item.date} · {fmt(item.total, item.currency)}
                   </Text>
-                  <Text style={[styles.cardDays, { color: urgent ? '#ef4444' : t.textSubtle }]}>
+                  <Text style={[styles.cardDays, { color: urgent ? t.danger : t.textSubtle }]}>
                     {days === 0 ? 'Deletes today' : `${days} day${days !== 1 ? 's' : ''} left`}
                   </Text>
                 </View>
@@ -170,7 +170,7 @@ export default function TrashScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => handleDelete(item.id)}
-                    style={[styles.actionBtn, { backgroundColor: '#ef444418' }]}
+                    style={[styles.actionBtn, { backgroundColor: t.dangerBg }]}
                     hitSlop={4}
                   >
                     <MaterialCommunityIcons name="delete-forever-outline" size={18} color="#ef4444" />

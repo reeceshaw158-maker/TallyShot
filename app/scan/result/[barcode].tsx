@@ -59,6 +59,7 @@ export default function ScanResultScreen() {
         barcode: String(barcode), status: 'not_found',
         name: null, brand: null, imageUrl: null, categories: null, quantity: null,
         nutriscore: null, novaGroup: null, ecoscore: null, nutriments: null,
+        ingredients: null, allergens: null, countries: null,
         fetchedAt: new Date().toISOString(),
       };
       if (stateParam === 'not_found')   { safeSet({ kind: 'not_found', record: blank }); return; }
@@ -135,6 +136,26 @@ function Loading({ t, barcode }: { t: SemanticTokens; barcode: string }) {
 function Found({
   t, record, refreshing, onRefresh,
 }: { t: SemanticTokens; record: ProductRecord; refreshing: boolean; onRefresh: () => void }) {
+  const n = record.nutriments;
+
+  // Pre-fill flow into the new-expense screen. We pass merchant (product
+  // name), category 'Food & Drink' (closest stock category to "Groceries"
+  // — the legacy enum doesn't define Groceries), and a notes string with
+  // brand + quantity so the user can identify the line item later.
+  const handleLogAsExpense = () => {
+    const notes = [record.brand, record.quantity, record.barcode ? `Barcode: ${record.barcode}` : null]
+      .filter(Boolean).join(' · ');
+    const prefill = {
+      merchant: record.name ?? '',
+      category: 'Food & Drink',
+      notes,
+    };
+    router.replace({
+      pathname: '/review/[id]',
+      params: { id: 'new', prefill: JSON.stringify(prefill) },
+    });
+  };
+
   return (
     <View style={styles.foundWrap}>
       {/* Hero card */}
@@ -168,6 +189,38 @@ function Found({
         <NovaPill  t={t} group={record.novaGroup} />
       </View>
 
+      {/* Nutrition summary row — Fat | Sugar | Salt | Protein per 100g */}
+      {n && (
+        <View style={styles.summaryPillRow}>
+          <SummaryPill t={t} label="Fat"     value={fmtG(n.fat100g)} />
+          <SummaryPill t={t} label="Sugar"   value={fmtG(n.sugars100g)} />
+          <SummaryPill t={t} label="Salt"    value={fmtG(n.salt100g)} />
+          <SummaryPill t={t} label="Protein" value={fmtG(n.proteins100g)} />
+        </View>
+      )}
+
+      {/* Allergens — highlighted in danger red per brief */}
+      {record.allergens ? (
+        <View style={[styles.allergenBox, { backgroundColor: t.dangerBg, borderColor: t.danger }]}>
+          <MaterialCommunityIcons name="alert-octagon" size={18} color={t.danger} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.allergenTitle, { color: t.danger }]}>Allergens</Text>
+            <Text style={[styles.allergenList, { color: t.danger }]}>{prettyAllergens(record.allergens)}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* Country of origin */}
+      {record.countries ? (
+        <View style={[styles.metaRow, { backgroundColor: t.surface, borderColor: t.border }]}>
+          <MaterialCommunityIcons name="earth" size={16} color={t.textMuted} />
+          <Text style={[styles.metaLabel, { color: t.textMuted }]}>Country</Text>
+          <Text style={[styles.metaValue, { color: t.textPrimary }]} numberOfLines={1}>
+            {prettyCountries(record.countries)}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Nutrition */}
       {record.nutriments ? (
         <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.border }]}>
@@ -190,6 +243,16 @@ function Found({
         </View>
       )}
 
+      {/* Ingredients */}
+      {record.ingredients ? (
+        <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.border }]}>
+          <Text style={[styles.cardTitle, { color: t.textPrimary }]}>Ingredients</Text>
+          <Text style={[styles.ingredientsText, { color: t.textMuted }]}>
+            {record.ingredients}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Footer */}
       <View style={styles.footerRow}>
         <Text style={[styles.footerText, { color: t.textSubtle }]}>
@@ -201,14 +264,53 @@ function Found({
         </SpringButton>
       </View>
 
-      <SpringButton
-        style={[styles.cta, { backgroundColor: t.cta, marginTop: 18 }]}
-        onPress={() => router.back()}
-      >
-        <Text style={[styles.ctaText, { color: t.ctaText }]}>Scan another</Text>
-      </SpringButton>
+      {/* Two-button action row per brief: ghost (Scan another) + filled (Log as Expense) */}
+      <View style={styles.actionRow}>
+        <SpringButton
+          style={[styles.cta, styles.ctaHalf, styles.ctaGhost, { borderColor: t.border }]}
+          onPress={() => router.back()}
+        >
+          <MaterialCommunityIcons name="barcode-scan" size={16} color={t.textPrimary} />
+          <Text style={[styles.ctaText, { color: t.textPrimary }]}>Scan another</Text>
+        </SpringButton>
+        <SpringButton
+          style={[styles.cta, styles.ctaHalf, { backgroundColor: t.cta }]}
+          onPress={handleLogAsExpense}
+        >
+          <Text style={[styles.ctaText, { color: t.ctaText }]}>Log as Expense →</Text>
+        </SpringButton>
+      </View>
     </View>
   );
+}
+
+function SummaryPill({ t, label, value }: { t: SemanticTokens; label: string; value: string }) {
+  return (
+    <View style={[styles.summaryPill, { backgroundColor: t.surface, borderColor: t.border }]}>
+      <Text style={[styles.summaryPillValue, { color: t.textPrimary }]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.summaryPillLabel, { color: t.textMuted }]}>{label}</Text>
+    </View>
+  );
+}
+
+/** Strip OFF's `en:`-style language prefix and Title Case the result. */
+function prettyAllergens(raw: string): string {
+  return raw
+    .split(/[,;]/)
+    .map((s) => s.replace(/^[a-z]{2}:/, '').trim())
+    .filter(Boolean)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1).replace(/[-_]/g, ' '))
+    .join(', ');
+}
+
+function prettyCountries(raw: string): string {
+  return raw
+    .split(/[,;]/)
+    .map((s) => s.replace(/^[a-z]{2}:/, '').trim().replace(/-/g, ' '))
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(', ');
 }
 
 function NotFound({ t, barcode }: { t: SemanticTokens; barcode: string }) {
@@ -288,12 +390,19 @@ function ErrorState({ t, message, onRetry }: { t: SemanticTokens; message?: stri
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 function GradePill({ t, label, grade }: { t: SemanticTokens; label: string; grade: string | null }) {
+  // Nutri-Score / Eco-Score palette per design brief. Foreground colours are
+  // chosen so each grade pill clears WCAG AA against its own background:
+  //   A (#00C896): black FG ≈ 7.8:1
+  //   B (#85BB2F): black FG ≈ 6.0:1
+  //   C (#FFCC00): black FG ≈ 12.8:1
+  //   D (#FF8C00): black FG ≈ 6.7:1
+  //   E (#FF4757): white FG ≈ 4.6:1
   const colors: Record<string, { bg: string; fg: string }> = {
-    a: { bg: '#15803d', fg: '#fff' },
-    b: { bg: '#65a30d', fg: '#fff' },
-    c: { bg: '#ca8a04', fg: '#fff' },
-    d: { bg: '#ea580c', fg: '#fff' },
-    e: { bg: '#b91c1c', fg: '#fff' },
+    a: { bg: '#00C896', fg: '#0F0F0F' },
+    b: { bg: '#85BB2F', fg: '#0F0F0F' },
+    c: { bg: '#FFCC00', fg: '#0F0F0F' },
+    d: { bg: '#FF8C00', fg: '#0F0F0F' },
+    e: { bg: '#FF4757', fg: '#FFFFFF' },
   };
   const palette = grade ? colors[grade] : null;
   return (
@@ -307,14 +416,18 @@ function GradePill({ t, label, grade }: { t: SemanticTokens; label: string; grad
 }
 
 function NovaPill({ t, group }: { t: SemanticTokens; group: number | null }) {
-  // Higher = more processed (4 = ultra-processed). Colour accordingly.
-  const palette = group
-    ? ({ 1: '#15803d', 2: '#65a30d', 3: '#ea580c', 4: '#b91c1c' } as Record<number, string>)[group]
-    : null;
+  // Higher = more processed (4 = ultra-processed). Maps to brief palette.
+  const map: Record<number, { bg: string; fg: string }> = {
+    1: { bg: '#00C896', fg: '#0F0F0F' },
+    2: { bg: '#85BB2F', fg: '#0F0F0F' },
+    3: { bg: '#FF8C00', fg: '#0F0F0F' },
+    4: { bg: '#FF4757', fg: '#FFFFFF' },
+  };
+  const palette = group ? map[group] : null;
   return (
-    <View style={[styles.gradePill, { backgroundColor: palette ?? t.surfaceElevated, borderColor: t.border }]}>
-      <Text style={[styles.gradePillLabel, { color: palette ? '#fff' : t.textSubtle }]}>NOVA</Text>
-      <Text style={[styles.gradePillValue, { color: palette ? '#fff' : t.textMuted }]}>
+    <View style={[styles.gradePill, { backgroundColor: palette?.bg ?? t.surfaceElevated, borderColor: t.border }]}>
+      <Text style={[styles.gradePillLabel, { color: palette ? palette.fg : t.textSubtle }]}>NOVA</Text>
+      <Text style={[styles.gradePillValue, { color: palette ? palette.fg : t.textMuted }]}>
         {group ?? '—'}
       </Text>
     </View>
@@ -421,4 +534,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1,
   },
   refreshBtnText: { fontFamily: 'Inter_500Medium', fontSize: 11 },
+
+  // ── v2 additions ─────────────────────────────────────────────────────────
+  summaryPillRow: { flexDirection: 'row', gap: 6 },
+  summaryPill: {
+    flex: 1, borderRadius: 12, borderWidth: 1,
+    paddingVertical: 10, paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  summaryPillValue: { fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: -0.2 },
+  summaryPillLabel: { fontFamily: 'Inter_500Medium', fontSize: 10, marginTop: 2, letterSpacing: 0.3 },
+
+  allergenBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    borderWidth: 1, borderLeftWidth: 4, borderRadius: 12,
+    padding: 12,
+  },
+  allergenTitle: { fontFamily: 'Inter_700Bold', fontSize: 12, letterSpacing: 0.4 },
+  allergenList: { fontFamily: 'Inter_500Medium', fontSize: 13, marginTop: 2 },
+
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10,
+  },
+  metaLabel: { fontFamily: 'Inter_500Medium', fontSize: 12 },
+  metaValue: { flex: 1, textAlign: 'right', fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+
+  ingredientsText: { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 18, marginTop: 4 },
+
+  actionRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  ctaHalf: { flex: 1, flexDirection: 'row', gap: 6, marginTop: 0 },
 });

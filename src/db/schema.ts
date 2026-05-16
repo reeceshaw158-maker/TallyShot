@@ -219,6 +219,21 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     }
   }
 
+  // products: ingredients/allergens/country added in v2 — additive migration
+  // so any existing user cache survives.
+  const productCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(products)`);
+  const pcols = new Set(productCols.map((c) => c.name));
+  const productMigrations: [string, string][] = [
+    ['ingredients_text', `ALTER TABLE products ADD COLUMN ingredients_text TEXT`],
+    ['allergens',        `ALTER TABLE products ADD COLUMN allergens TEXT`],
+    ['countries',        `ALTER TABLE products ADD COLUMN countries TEXT`],
+  ];
+  for (const [col, sql] of productMigrations) {
+    if (!pcols.has(col)) {
+      try { await db.execAsync(sql); } catch (e) { console.warn(`products.${col} migration failed`, e); }
+    }
+  }
+
   // ── One-off colour migrations ────────────────────────────────────────────
   // Brand pivot away from orange — replace the old Marketing & Advertising
   // default colour for users who haven't customised it. Only touches the

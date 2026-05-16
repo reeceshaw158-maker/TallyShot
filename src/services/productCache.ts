@@ -35,6 +35,13 @@ const OFF_FIELDS = [
   'nova_group',
   'ecoscore_grade',
   'nutriments',
+  // v2: brief asks for ingredients, allergens (red), country of origin
+  'ingredients_text_en',
+  'ingredients_text',
+  'allergens_tags',
+  'allergens',
+  'countries',
+  'countries_tags',
 ].join(',');
 
 // 14 days — OFF data is community-curated and rarely changes for a given
@@ -58,6 +65,12 @@ export interface ProductRecord {
   ecoscore: string | null;       // 'a'..'e'
   /** Per-100g values from OFF — only the fields we care about, normalised. */
   nutriments: Nutriments | null;
+  /** Free-text ingredients list (English where available, else native). */
+  ingredients: string | null;
+  /** Comma-joined allergen tags (e.g. "en:gluten, en:milk"). */
+  allergens: string | null;
+  /** Country (or comma-joined countries) of origin. */
+  countries: string | null;
   fetchedAt: string;
 }
 
@@ -222,6 +235,9 @@ function normalize(barcode: string, body: any): ProductRecord {
       novaGroup: null,
       ecoscore: null,
       nutriments: null,
+      ingredients: null,
+      allergens: null,
+      countries: null,
       fetchedAt: now,
     };
   }
@@ -238,8 +254,28 @@ function normalize(barcode: string, body: any): ProductRecord {
     novaGroup: pickInt(p.nova_group, 1, 4),
     ecoscore: pickGrade(p.ecoscore_grade),
     nutriments: extractNutriments(p.nutriments),
+    // Prefer the English ingredients text when OFF has it; the native string
+    // works as a fallback. Trimmed because OFF sometimes returns trailing whitespace.
+    ingredients: pickString(p.ingredients_text_en, p.ingredients_text, null),
+    allergens: pickAllergens(p.allergens_tags, p.allergens),
+    countries: pickString(p.countries, p.countries_tags, null),
     fetchedAt: now,
   };
+}
+
+/**
+ * OFF returns allergens as either an array of tags like ['en:gluten','en:milk']
+ * or a free-text comma string. We normalise to a clean human-readable list so
+ * the UI doesn't have to think about it.
+ */
+function pickAllergens(tags: any, fallback: any): string | null {
+  if (Array.isArray(tags) && tags.length > 0) {
+    const cleaned = tags
+      .map((t) => typeof t === 'string' ? t.replace(/^[a-z]{2}:/, '').trim() : '')
+      .filter(Boolean);
+    if (cleaned.length > 0) return cleaned.join(', ');
+  }
+  return pickString(fallback, null);
 }
 
 function pickString(...candidates: any[]): string | null {
@@ -294,6 +330,7 @@ function blankRecord(barcode: string, status: ProductStatus, fetchedAt: string):
     barcode, status, fetchedAt,
     name: null, brand: null, imageUrl: null, categories: null, quantity: null,
     nutriscore: null, novaGroup: null, ecoscore: null, nutriments: null,
+    ingredients: null, allergens: null, countries: null,
   };
 }
 
@@ -317,6 +354,9 @@ async function readCache(barcode: string): Promise<ProductRecord | null> {
     novaGroup:   row.nova_group ?? null,
     ecoscore:    row.ecoscore ?? null,
     nutriments:  row.nutriments ? safeParse(row.nutriments) : null,
+    ingredients: row.ingredients_text ?? null,
+    allergens:   row.allergens ?? null,
+    countries:   row.countries ?? null,
     fetchedAt:   row.fetched_at,
   };
 }
@@ -330,20 +370,25 @@ async function writeCache(p: ProductRecord): Promise<void> {
   await db.runAsync(
     `INSERT INTO products
        (barcode, status, name, brand, image_url, categories, quantity,
-        nutriscore, nova_group, ecoscore, nutriments, fetched_at, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'openfoodfacts')
+        nutriscore, nova_group, ecoscore, nutriments,
+        ingredients_text, allergens, countries,
+        fetched_at, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'openfoodfacts')
      ON CONFLICT(barcode) DO UPDATE SET
-       status      = excluded.status,
-       name        = excluded.name,
-       brand       = excluded.brand,
-       image_url   = excluded.image_url,
-       categories  = excluded.categories,
-       quantity    = excluded.quantity,
-       nutriscore  = excluded.nutriscore,
-       nova_group  = excluded.nova_group,
-       ecoscore    = excluded.ecoscore,
-       nutriments  = excluded.nutriments,
-       fetched_at  = excluded.fetched_at`,
+       status            = excluded.status,
+       name              = excluded.name,
+       brand             = excluded.brand,
+       image_url         = excluded.image_url,
+       categories        = excluded.categories,
+       quantity          = excluded.quantity,
+       nutriscore        = excluded.nutriscore,
+       nova_group        = excluded.nova_group,
+       ecoscore          = excluded.ecoscore,
+       nutriments        = excluded.nutriments,
+       ingredients_text  = excluded.ingredients_text,
+       allergens         = excluded.allergens,
+       countries         = excluded.countries,
+       fetched_at        = excluded.fetched_at`,
     [
       p.barcode,
       p.status,
@@ -356,6 +401,9 @@ async function writeCache(p: ProductRecord): Promise<void> {
       p.novaGroup,
       p.ecoscore,
       p.nutriments ? JSON.stringify(p.nutriments) : null,
+      p.ingredients,
+      p.allergens,
+      p.countries,
       p.fetchedAt,
     ]
   );

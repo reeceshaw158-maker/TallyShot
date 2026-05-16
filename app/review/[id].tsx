@@ -53,11 +53,13 @@ const PAYMENT_METHODS = [
 export default function ReviewScreen() {
   const t = useThemeTokens();
   const insets = useSafeAreaInsets();
-  const { id, imageUri, extraction, additionalImages } = useLocalSearchParams<{
+  const { id, imageUri, extraction, additionalImages, prefill } = useLocalSearchParams<{
     id: string;
     imageUri?: string;
     extraction?: string;
     additionalImages?: string;
+    /** JSON blob of {merchant, category, notes} for barcode-driven prefills. */
+    prefill?: string;
   }>();
   const isNew = id === 'new';
   const currency = useAppStore((s) => s.currency);
@@ -113,6 +115,20 @@ export default function ReviewScreen() {
 
   // ── Pre-fill from extraction or existing receipt ─────────────────────────
   useEffect(() => {
+    // Barcode-driven prefill: no image, just merchant/category/notes from the
+    // Open Food Facts scan. Lighter than the extraction path because OFF data
+    // doesn't include amounts.
+    if (isNew && prefill && !extraction) {
+      try {
+        const p = JSON.parse(prefill) as { merchant?: string; category?: string; notes?: string };
+        if (p.merchant) setMerchant(p.merchant);
+        if (p.notes) setNotes(p.notes);
+        const cat = (p.category as Category) ?? 'Other';
+        setLegacyCategory(cat);
+        setIsTaxDeductible(CATEGORY_DEDUCTIBLE_DEFAULTS[cat] ?? false);
+      } catch {}
+      return;
+    }
     if (isNew && extraction) {
       try {
         const ex: ExtractionResult = JSON.parse(extraction);

@@ -211,6 +211,12 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     ['auto_tracked',  `ALTER TABLE drives ADD COLUMN auto_tracked INTEGER NOT NULL DEFAULT 0`],
     ['deleted_at',    `ALTER TABLE drives ADD COLUMN deleted_at TEXT`],
     ['is_reimbursable', `ALTER TABLE drives ADD COLUMN is_reimbursable INTEGER NOT NULL DEFAULT 0`],
+    // v2 GPS tracking: reverse-geocoded addresses, total drive time, and a
+    // JSON-encoded list of {lat,lng,ts} samples for future map preview.
+    ['start_address',     `ALTER TABLE drives ADD COLUMN start_address TEXT`],
+    ['end_address',       `ALTER TABLE drives ADD COLUMN end_address TEXT`],
+    ['duration_seconds',  `ALTER TABLE drives ADD COLUMN duration_seconds INTEGER`],
+    ['route_json',        `ALTER TABLE drives ADD COLUMN route_json TEXT`],
   ];
 
   for (const [col, sql] of driveMigrations) {

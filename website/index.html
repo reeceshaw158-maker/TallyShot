@@ -1,0 +1,1521 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0F0F0F" />
+  <title>TallyShot — Track expenses, scan receipts, log every mile</title>
+  <meta name="description" content="TallyShot is the UK expense-tracking app built for freelancers and the self-employed. AI receipt scanning, GPS mileage tracking at the HMRC 45p/mile rate, barcode nutrition info, and tax-ready CSV/PDF export." />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="TallyShot — Track expenses, scan receipts, log every mile" />
+  <meta property="og:description" content="The UK expense-tracking app for freelancers and the self-employed. AI receipts, HMRC mileage, barcode nutrition, tax-ready exports." />
+  <meta property="og:site_name" content="TallyShot" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+
+  <style>
+    /* ─── DESIGN TOKENS ─────────────────────────────────────────────────
+       Mirror the in-app theme tokens so the marketing site and product
+       feel like the same brand. Values are intentionally pinned, not
+       derived, so a one-off marketing-only tweak doesn't ripple into
+       the app theme accidentally. */
+    :root {
+      --bg:            #0F0F0F;
+      --surface:       #1A1A1A;
+      --surface-elev:  #222222;
+      --border:        #2A2A2A;
+      --text-primary:  #FFFFFF;
+      --text-secondary:#A0A0A0;
+      --text-subtle:   #6B6B6B;
+      --accent:        #00C896;
+      --accent-soft:   rgba(0, 200, 150, 0.14);
+      --accent-glow:   rgba(0, 200, 150, 0.45);
+      --secondary:     #4F8EF7;
+      --danger:        #FF4757;
+      --warning:       #FFCC00;
+
+      --radius:        14px;
+      --radius-lg:     22px;
+      --radius-xl:     28px;
+
+      --container:     1180px;
+      --gutter:        24px;
+
+      --shadow-card:   0 10px 32px rgba(0,0,0,0.4);
+      --shadow-cta:    0 12px 36px rgba(0,200,150,0.32);
+
+      --ease-out:      cubic-bezier(.22,.61,.36,1);
+      --ease-spring:   cubic-bezier(.34,1.56,.64,1);
+    }
+
+    /* ─── RESET ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      font-weight: 400;
+      background: var(--bg);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+    img, svg { max-width: 100%; display: block; }
+    button { font: inherit; cursor: pointer; border: 0; background: transparent; color: inherit; }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, h4 { margin: 0; line-height: 1.15; letter-spacing: -0.02em; font-weight: 800; }
+    p { margin: 0; }
+
+    .container { width: 100%; max-width: var(--container); padding: 0 var(--gutter); margin: 0 auto; }
+
+    /* ─── NAVIGATION ─────────────────────────────────────────────────── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 50;
+      padding: 16px 0;
+      transition: background-color .25s var(--ease-out), backdrop-filter .25s var(--ease-out), border-color .25s var(--ease-out);
+      border-bottom: 1px solid transparent;
+    }
+    .nav.is-scrolled {
+      background-color: rgba(15, 15, 15, 0.78);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+              backdrop-filter: saturate(160%) blur(14px);
+      border-bottom-color: var(--border);
+    }
+    .nav__inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -0.02em; }
+    .logo__mark {
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent);
+      color: var(--bg);
+      border-radius: 10px;
+      font-size: 16px;
+    }
+
+    .nav__links { display: flex; align-items: center; gap: 28px; }
+    .nav__links a {
+      font-size: 14px; font-weight: 500; color: var(--text-secondary);
+      transition: color .15s var(--ease-out);
+    }
+    .nav__links a:hover { color: var(--text-primary); }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px;
+      padding: 11px 20px;
+      border-radius: 12px;
+      font-weight: 700; font-size: 14px;
+      line-height: 1;
+      transition: transform .15s var(--ease-out), box-shadow .25s var(--ease-out), background-color .15s var(--ease-out);
+      will-change: transform;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    /* Primary CTA — green with a subtle perpetual shimmer */
+    .btn--primary {
+      background: var(--accent);
+      color: var(--bg);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-cta);
+    }
+    .btn--primary::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.45) 50%, transparent 70%);
+      transform: translateX(-100%);
+      animation: shimmer 3.6s var(--ease-out) infinite;
+      pointer-events: none;
+    }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 60%, 100% { transform: translateX(100%); } }
+
+    .btn--ghost {
+      background: var(--surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn--ghost:hover { background: var(--surface-elev); }
+
+    /* Hamburger */
+    .hamburger {
+      width: 40px; height: 40px;
+      display: none;
+      align-items: center; justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text-primary);
+    }
+    .mobile-menu {
+      position: fixed;
+      top: 70px; left: var(--gutter); right: var(--gutter);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 49;
+      box-shadow: var(--shadow-card);
+    }
+    .mobile-menu.is-open { display: flex; }
+    .mobile-menu a { padding: 12px 14px; border-radius: 10px; color: var(--text-secondary); font-weight: 500; }
+    .mobile-menu a:hover { background: var(--surface-elev); color: var(--text-primary); }
+    .mobile-menu .btn { margin-top: 8px; width: 100%; }
+
+    /* ─── HERO ─────────────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      padding: 140px 0 80px;
+      overflow: hidden;
+    }
+    /* Soft animated gradient orb behind the hero — adds life without
+       overwhelming the dark canvas. */
+    .hero::before, .hero::after {
+      content: ''; position: absolute; pointer-events: none;
+      filter: blur(80px);
+      opacity: 0.55;
+      z-index: 0;
+    }
+    .hero::before {
+      width: 520px; height: 520px;
+      background: radial-gradient(circle, rgba(0,200,150,0.32), transparent 65%);
+      top: -120px; left: -120px;
+      animation: orbDrift 18s ease-in-out infinite alternate;
+    }
+    .hero::after {
+      width: 480px; height: 480px;
+      background: radial-gradient(circle, rgba(79,142,247,0.22), transparent 65%);
+      bottom: -160px; right: -80px;
+      animation: orbDrift 22s ease-in-out -6s infinite alternate;
+    }
+    @keyframes orbDrift {
+      0%   { transform: translate3d(0, 0, 0) scale(1); }
+      100% { transform: translate3d(40px, -30px, 0) scale(1.08); }
+    }
+    .hero__grid {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px 6px 8px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(0,200,150,0.3);
+      color: var(--accent);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      margin-bottom: 22px;
+    }
+    .eyebrow__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(0,200,150,0.18); animation: pulseDot 2s ease-in-out infinite; }
+    @keyframes pulseDot { 50% { box-shadow: 0 0 0 8px rgba(0,200,150,0); } }
+
+    .hero h1 {
+      font-size: clamp(36px, 5.4vw, 64px);
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero p.lead {
+      margin-top: 22px;
+      color: var(--text-secondary);
+      font-size: clamp(15px, 1.4vw, 18px);
+      max-width: 520px;
+      line-height: 1.55;
+    }
+    .hero__ctas {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-top: 32px;
+    }
+    .store-btn {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 12px 20px;
+      background: var(--text-primary);
+      color: var(--bg);
+      border-radius: 14px;
+      font-weight: 600;
+      transition: transform .15s var(--ease-out), box-shadow .25s var(--ease-out);
+      min-width: 188px;
+    }
+    .store-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(255,255,255,0.12); }
+    .store-btn i { font-size: 28px; line-height: 1; }
+    .store-btn .store-label { font-size: 11px; opacity: 0.7; line-height: 1.1; }
+    .store-btn .store-name  { font-size: 16px; font-weight: 800; line-height: 1.15; }
+    .store-btn--dark {
+      background: var(--surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+
+    .hero__meta {
+      display: flex; align-items: center; gap: 16px;
+      margin-top: 24px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+    .hero__meta i { color: var(--accent); }
+
+    /* PHONE MOCKUP — built entirely with CSS so it stays sharp at any DPI
+       and we don't ship a 400 KB PNG. */
+    .phone-stage { position: relative; display: flex; justify-content: center; }
+    .phone {
+      position: relative;
+      width: 290px;
+      aspect-ratio: 290 / 600;
+      background: linear-gradient(160deg, #1f1f1f, #0c0c0c);
+      border-radius: 42px;
+      border: 1px solid #2a2a2a;
+      padding: 12px;
+      box-shadow:
+        0 30px 60px rgba(0,0,0,0.5),
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 0 70px rgba(0,200,150,0.18);
+      animation: phoneFloat 6s ease-in-out infinite;
+    }
+    @keyframes phoneFloat {
+      0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+      50%      { transform: translateY(-14px) rotate(-1.5deg); }
+    }
+    .phone::before { /* notch */
+      content: '';
+      position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 92px; height: 22px;
+      background: #060606;
+      border-radius: 14px;
+      z-index: 2;
+    }
+    .phone__screen {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      border-radius: 32px;
+      overflow: hidden;
+      padding: 38px 14px 14px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .mini-header { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px; }
+    .mini-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; }
+    .mini-brand__mark {
+      width: 22px; height: 22px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--bg);
+      font-size: 11px;
+    }
+    .mini-icon-btn {
+      width: 26px; height: 26px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+    .mini-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px;
+    }
+    .mini-card__label {
+      font-size: 8px; letter-spacing: 1px;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .mini-card__amount {
+      font-size: 26px; font-weight: 800; letter-spacing: -0.04em;
+      margin-top: 2px;
+    }
+    .mini-card__sub { font-size: 9px; color: var(--text-secondary); margin-top: 1px; }
+    .mini-card__stats {
+      margin-top: 12px;
+      display: flex; align-items: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+    }
+    .mini-stat { flex: 1; text-align: center; }
+    .mini-stat__value { font-size: 11px; font-weight: 700; }
+    .mini-stat__value.accent { color: var(--accent); }
+    .mini-stat__label { font-size: 7px; color: var(--text-secondary); margin-top: 1px; }
+    .mini-stat__sep { width: 1px; height: 18px; background: var(--border); }
+
+    .mini-banner {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 9px;
+    }
+    .mini-banner i { color: var(--accent); font-size: 9px; }
+    .mini-banner span { color: var(--text-primary); flex: 1; }
+    .mini-banner strong { color: var(--accent); font-weight: 700; }
+
+    .mini-quick { display: flex; justify-content: space-around; margin-top: 4px; }
+    .mini-quick__item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .mini-quick__circle {
+      width: 36px; height: 36px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
+      font-size: 13px;
+    }
+    .mini-quick__label { font-size: 8px; color: var(--text-secondary); font-weight: 500; }
+
+    /* Floating stat badges around the phone */
+    .float-badge {
+      position: absolute;
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: var(--shadow-card);
+      animation: badgeFloat 7s ease-in-out infinite;
+    }
+    .float-badge i { color: var(--accent); }
+    .float-badge--top    { top: 6%;  left: -8%;  animation-delay: -1s; }
+    .float-badge--mid    { top: 44%; right: -6%; animation-delay: -3s; }
+    .float-badge--bottom { bottom: 8%; left: 4%; animation-delay: -5s; }
+    @keyframes badgeFloat {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-10px); }
+    }
+
+    /* ─── SOCIAL PROOF BAR ───────────────────────────────────────────── */
+    .proof {
+      padding: 36px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, transparent, rgba(255,255,255,0.015));
+    }
+    .proof__lead {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.4px;
+      margin-bottom: 18px;
+    }
+    .stars {
+      display: flex; justify-content: center; gap: 4px;
+      color: var(--warning);
+      font-size: 14px;
+      margin-bottom: 22px;
+    }
+    .proof__stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+    .proof__stats .stat__value { font-size: clamp(22px, 3.2vw, 32px); font-weight: 800; letter-spacing: -0.02em; }
+    .proof__stats .stat__label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 500; }
+
+    /* ─── SECTION COMMONS ────────────────────────────────────────────── */
+    section { padding: 100px 0; position: relative; }
+    .section-head { text-align: center; max-width: 720px; margin: 0 auto 56px; }
+    .section-head h2 { font-size: clamp(28px, 4vw, 44px); }
+    .section-head p { margin-top: 16px; color: var(--text-secondary); font-size: clamp(15px, 1.4vw, 17px); }
+    .section-eyebrow {
+      display: inline-block;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    /* ─── FEATURES GRID ──────────────────────────────────────────────── */
+    .features__grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .feature {
+      position: relative;
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      transition: transform .25s var(--ease-out), border-color .2s var(--ease-out), box-shadow .25s var(--ease-out);
+      overflow: hidden;
+    }
+    .feature::before { /* hover glow */
+      content: '';
+      position: absolute; inset: -1px;
+      border-radius: inherit;
+      background: radial-gradient(circle at var(--mx, 50%) var(--my, 0%), rgba(0,200,150,0.18), transparent 60%);
+      opacity: 0;
+      transition: opacity .25s var(--ease-out);
+      pointer-events: none;
+    }
+    .feature:hover { transform: translateY(-4px); border-color: rgba(0,200,150,0.4); box-shadow: 0 16px 40px rgba(0,200,150,0.12); }
+    .feature:hover::before { opacity: 1; }
+    .feature__icon {
+      width: 52px; height: 52px;
+      background: var(--accent-soft);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      margin-bottom: 18px;
+    }
+    .feature h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .feature p  { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+    /* ─── HOW IT WORKS ───────────────────────────────────────────────── */
+    .how__row { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .how__line {
+      position: absolute;
+      top: 38px; left: 12%; right: 12%; height: 2px;
+      background-image: linear-gradient(to right, var(--border) 50%, transparent 50%);
+      background-size: 12px 2px;
+      z-index: 0;
+    }
+    .how__line::after {
+      content: '';
+      position: absolute; inset: 0;
+      width: 0;
+      background: var(--accent);
+      transition: width 1.4s var(--ease-out);
+    }
+    .how__row.is-visible .how__line::after { width: 100%; }
+    .step { position: relative; z-index: 1; text-align: center; padding: 0 12px; }
+    .step__num {
+      width: 76px; height: 76px;
+      margin: 0 auto 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      position: relative;
+      transition: border-color .3s var(--ease-out), transform .3s var(--ease-spring);
+    }
+    .step__num span {
+      font-size: 28px; font-weight: 800; color: var(--accent);
+    }
+    .step__num i {
+      position: absolute; bottom: -8px; right: -4px;
+      width: 30px; height: 30px;
+      background: var(--accent);
+      color: var(--bg);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      border: 3px solid var(--bg);
+    }
+    .step:hover .step__num { transform: scale(1.05); border-color: var(--accent); }
+    .step h3 { font-size: 18px; margin-bottom: 8px; }
+    .step p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; max-width: 300px; margin: 0 auto; }
+
+    /* ─── SPOTLIGHT (two-column) ─────────────────────────────────────── */
+    .spotlight {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+    }
+    .spotlight--reverse .spotlight__visual { order: -1; }
+    .spotlight h2 { font-size: clamp(28px, 3.8vw, 40px); }
+    .spotlight p.lead { color: var(--text-secondary); font-size: clamp(15px, 1.3vw, 17px); margin-top: 18px; line-height: 1.6; }
+    .checklist { list-style: none; padding: 0; margin: 28px 0 0; display: flex; flex-direction: column; gap: 14px; }
+    .checklist li {
+      display: flex; align-items: flex-start; gap: 12px;
+      font-size: 15px; color: var(--text-primary);
+    }
+    .checklist .check {
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+    .checklist li span { color: var(--text-secondary); }
+    .checklist li strong { color: var(--text-primary); font-weight: 600; }
+
+    /* Barcode spotlight mockup — replica of the in-app bottom sheet */
+    .barcode-sheet {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 22px;
+      box-shadow: var(--shadow-card);
+      max-width: 380px;
+      margin: 0 auto;
+    }
+    .barcode-sheet__hero {
+      display: flex; gap: 14px; align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .barcode-sheet__img {
+      width: 72px; height: 72px;
+      background: var(--surface-elev);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-subtle);
+      font-size: 28px;
+    }
+    .barcode-sheet__name { font-size: 15px; font-weight: 700; }
+    .barcode-sheet__brand { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+    .barcode-sheet__qty { font-size: 11px; color: var(--text-subtle); margin-top: 6px; }
+
+    .grade-row { display: flex; gap: 8px; margin-top: 14px; }
+    .grade-pill {
+      flex: 1; text-align: center;
+      padding: 10px 4px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .grade-pill__label { font-size: 9px; font-weight: 600; letter-spacing: 0.4px; opacity: 0.9; }
+    .grade-pill__value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+    .grade-A { background: #00C896; color: #0F0F0F; border-color: transparent; }
+    .grade-C { background: #FFCC00; color: #0F0F0F; border-color: transparent; }
+    .grade-NOVA-3 { background: #FF8C00; color: #0F0F0F; border-color: transparent; }
+
+    .nutri-row { display: flex; gap: 6px; margin-top: 12px; }
+    .nutri-pill {
+      flex: 1; text-align: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 4px;
+    }
+    .nutri-pill__value { font-size: 12px; font-weight: 700; }
+    .nutri-pill__label { font-size: 9px; color: var(--text-secondary); margin-top: 2px; }
+
+    .allergen-box {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin-top: 14px;
+      padding: 12px;
+      background: rgba(255,71,87,0.14);
+      border: 1px solid var(--danger);
+      border-left: 4px solid var(--danger);
+      border-radius: 12px;
+    }
+    .allergen-box i { color: var(--danger); margin-top: 1px; }
+    .allergen-box__title { font-size: 10px; font-weight: 700; letter-spacing: 0.4px; color: var(--danger); }
+    .allergen-box__list  { font-size: 12px; color: var(--danger); margin-top: 3px; }
+
+    .sheet-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .sheet-actions .btn { flex: 1; padding: 11px 12px; font-size: 13px; }
+
+    /* GPS spotlight visual — animated map / route */
+    .map-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      max-width: 460px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .map-grid {
+      position: relative;
+      height: 220px;
+      border-radius: 16px;
+      background:
+        linear-gradient(0deg, var(--border) 1px, transparent 1px) 0 0/40px 40px,
+        linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0/40px 40px,
+        radial-gradient(circle at 30% 50%, rgba(0,200,150,0.1), transparent 60%),
+        var(--bg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .route {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+    }
+    .route__path {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 280;
+      stroke-dashoffset: 280;
+      animation: drawRoute 4s var(--ease-out) infinite;
+    }
+    @keyframes drawRoute {
+      0%   { stroke-dashoffset: 280; }
+      55%  { stroke-dashoffset: 0; }
+      100% { stroke-dashoffset: -280; }
+    }
+    .route__pin {
+      position: absolute;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 3px solid var(--bg);
+      box-shadow: 0 0 0 4px rgba(0,200,150,0.22);
+    }
+    .route__pin--a { top: 35%; left: 12%; }
+    .route__pin--b { top: 28%; right: 10%; background: var(--secondary); box-shadow: 0 0 0 4px rgba(79,142,247,0.22); }
+
+    .map-card__live {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 14px;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      color: var(--accent);
+    }
+    .live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0,200,150,0.25);
+      animation: pulseDot 1.6s ease-in-out infinite;
+    }
+    .map-card__stats {
+      display: flex; margin-top: 18px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .map-card__stats > div { flex: 1; text-align: center; }
+    .map-stat__value { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+    .map-stat__value.accent { color: var(--accent); }
+    .map-stat__label { font-size: 10px; color: var(--text-secondary); margin-top: 3px; }
+    .map-stat__sep { width: 1px; background: var(--border); flex: 0 0 1px; }
+
+    /* ─── PRICING ─────────────────────────────────────────────────────── */
+    .pricing__grid {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .plan {
+      position: relative;
+      padding: 36px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      display: flex; flex-direction: column;
+      transition: transform .25s var(--ease-out), border-color .2s var(--ease-out), box-shadow .25s var(--ease-out);
+    }
+    .plan:hover { transform: translateY(-4px); }
+    .plan--featured {
+      border-color: rgba(0,200,150,0.4);
+      box-shadow: 0 30px 60px rgba(0,200,150,0.15);
+    }
+    .plan__badge {
+      position: absolute; top: -12px; right: 24px;
+      background: var(--accent);
+      color: var(--bg);
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .plan__name { font-size: 14px; font-weight: 700; letter-spacing: 1.2px; color: var(--text-secondary); text-transform: uppercase; }
+    .plan__price { margin-top: 10px; display: flex; align-items: baseline; gap: 6px; }
+    .plan__price strong { font-size: 44px; font-weight: 800; letter-spacing: -0.03em; }
+    .plan__price span { color: var(--text-secondary); font-size: 14px; }
+    .plan__features {
+      list-style: none; padding: 0; margin: 28px 0;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .plan__features li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
+    .plan__features i { color: var(--accent); width: 18px; text-align: center; }
+    .plan__cta { margin-top: auto; width: 100%; }
+
+    /* ─── TESTIMONIALS ────────────────────────────────────────────────── */
+    .testimonials__grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .testimonial {
+      padding: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex; flex-direction: column;
+    }
+    .testimonial__stars { color: var(--warning); margin-bottom: 14px; font-size: 13px; letter-spacing: 1px; }
+    .testimonial__quote { font-size: 15px; line-height: 1.6; color: var(--text-primary); flex-grow: 1; }
+    .testimonial__quote::before { content: '“'; color: var(--accent); font-weight: 800; }
+    .testimonial__quote::after { content: '”'; color: var(--accent); font-weight: 800; }
+    .testimonial__author {
+      display: flex; align-items: center; gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .testimonial__avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--secondary));
+      color: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .testimonial__name { font-size: 13px; font-weight: 600; }
+    .testimonial__role { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* ─── DOWNLOAD CTA ────────────────────────────────────────────────── */
+    .download {
+      position: relative;
+      text-align: center;
+      padding: 110px 0;
+      overflow: hidden;
+    }
+    .download::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 30%, rgba(0,200,150,0.22), transparent 60%);
+      pointer-events: none;
+    }
+    .download__inner { position: relative; }
+    .download h2 { font-size: clamp(32px, 5vw, 52px); letter-spacing: -0.035em; }
+    .download p { margin-top: 18px; color: var(--text-secondary); font-size: 17px; }
+    .download__ctas { margin-top: 36px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+    /* ─── FOOTER ──────────────────────────────────────────────────────── */
+    footer {
+      padding: 60px 0 30px;
+      border-top: 1px solid var(--border);
+      background: #080808;
+    }
+    .footer__top {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 40px;
+      align-items: flex-start;
+      padding-bottom: 36px;
+      border-bottom: 1px solid var(--border);
+    }
+    .footer__tagline { color: var(--text-secondary); margin-top: 14px; max-width: 360px; font-size: 14px; }
+    .footer__links {
+      display: flex; flex-wrap: wrap; justify-content: flex-end;
+      gap: 20px 28px;
+    }
+    .footer__links a { font-size: 14px; color: var(--text-secondary); transition: color .15s var(--ease-out); }
+    .footer__links a:hover { color: var(--text-primary); }
+    .footer__bottom {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 14px;
+      padding-top: 24px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .footer__social { display: flex; gap: 10px; }
+    .footer__social a {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .15s var(--ease-out), color .15s var(--ease-out);
+    }
+    .footer__social a:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ─── REVEAL ON SCROLL ────────────────────────────────────────────── */
+    .reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s var(--ease-out), transform .7s var(--ease-out); }
+    .reveal.is-visible { opacity: 1; transform: translateY(0); }
+    .reveal.delay-1 { transition-delay: .08s; }
+    .reveal.delay-2 { transition-delay: .16s; }
+    .reveal.delay-3 { transition-delay: .24s; }
+    .reveal.delay-4 { transition-delay: .32s; }
+    .reveal.delay-5 { transition-delay: .40s; }
+    .reveal.delay-6 { transition-delay: .48s; }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1 !important; transform: none !important; }
+      .phone, .float-badge, .route__path, .live-dot, .eyebrow__dot, .btn--primary::after { animation: none !important; }
+    }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      section { padding: 70px 0; }
+      .hero { padding: 110px 0 60px; }
+      .hero__grid { grid-template-columns: 1fr; gap: 60px; }
+      .phone-stage { max-width: 320px; margin: 0 auto; }
+      .features__grid { grid-template-columns: repeat(2, 1fr); }
+      .how__row { grid-template-columns: 1fr; gap: 40px; }
+      .how__line { display: none; }
+      .spotlight { grid-template-columns: 1fr; gap: 40px; }
+      .spotlight--reverse .spotlight__visual { order: 0; }
+      .testimonials__grid { grid-template-columns: 1fr; }
+      .pricing__grid { grid-template-columns: 1fr; }
+      .footer__top { grid-template-columns: 1fr; }
+      .footer__links { justify-content: flex-start; }
+    }
+    @media (max-width: 720px) {
+      .nav__links { display: none; }
+      .hamburger { display: flex; }
+      .nav .btn--primary { display: none; }
+      .features__grid { grid-template-columns: 1fr; }
+      .proof__stats { grid-template-columns: 1fr; gap: 18px; }
+      .float-badge--top    { top: 2%;  left: -2%;  font-size: 11px; padding: 8px 12px; }
+      .float-badge--mid    { display: none; }
+      .float-badge--bottom { bottom: 4%; left: 0;  font-size: 11px; padding: 8px 12px; }
+      .hero__ctas { width: 100%; }
+      .store-btn { flex: 1; min-width: 0; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ════════════════════════════════════════════════════════
+       NAVIGATION
+       ════════════════════════════════════════════════════════ -->
+  <nav class="nav" id="nav" aria-label="Primary">
+    <div class="container nav__inner">
+      <a href="#top" class="logo" aria-label="TallyShot home">
+        <span class="logo__mark"><i class="fa-solid fa-receipt"></i></span>
+        <span>TallyShot</span>
+      </a>
+      <div class="nav__links" role="menubar">
+        <a href="#features" role="menuitem">Features</a>
+        <a href="#how" role="menuitem">How It Works</a>
+        <a href="#pricing" role="menuitem">Pricing</a>
+        <a href="#download" role="menuitem">Download</a>
+      </div>
+      <a href="#download" class="btn btn--primary">
+        <i class="fa-solid fa-arrow-down"></i> Download App
+      </a>
+      <button class="hamburger" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false" id="hamburger">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+    </div>
+    <div class="mobile-menu" id="mobile-menu" role="menu">
+      <a href="#features" role="menuitem">Features</a>
+      <a href="#how" role="menuitem">How It Works</a>
+      <a href="#pricing" role="menuitem">Pricing</a>
+      <a href="#download" role="menuitem">Download</a>
+      <a href="#download" class="btn btn--primary"><i class="fa-solid fa-arrow-down"></i> Download App</a>
+    </div>
+  </nav>
+
+  <!-- ════════════════════════════════════════════════════════
+       HERO
+       ════════════════════════════════════════════════════════ -->
+  <header class="hero" id="top">
+    <div class="container hero__grid">
+      <div class="hero__copy">
+        <span class="eyebrow reveal"><span class="eyebrow__dot"></span> Built for UK freelancers &amp; self-employed</span>
+        <h1 class="reveal delay-1">
+          Track expenses.<br />
+          Scan receipts.<br />
+          Log <span class="accent">every mile.</span>
+        </h1>
+        <p class="lead reveal delay-2">
+          TallyShot turns your phone into a self-assessment-ready expense tracker. AI receipt scanning, GPS mileage at the HMRC 45p/mile rate, and accountant-friendly exports — all in your pocket.
+        </p>
+
+        <div class="hero__ctas reveal delay-3">
+          <a class="store-btn store-btn--dark" href="#download" aria-label="Download for iOS">
+            <i class="fa-brands fa-apple" aria-hidden="true"></i>
+            <span>
+              <span class="store-label">Download on the</span><br />
+              <span class="store-name">App Store</span>
+            </span>
+          </a>
+          <a class="store-btn" href="#download" aria-label="Get it on Google Play">
+            <i class="fa-brands fa-google-play" aria-hidden="true"></i>
+            <span>
+              <span class="store-label">GET IT ON</span><br />
+              <span class="store-name">Google Play</span>
+            </span>
+          </a>
+        </div>
+
+        <div class="hero__meta reveal delay-4">
+          <i class="fa-solid fa-shield-halved"></i> No credit card required &nbsp;·&nbsp;
+          <i class="fa-solid fa-lock"></i> Receipts stay on your device
+        </div>
+      </div>
+
+      <!-- ── Phone mockup (pure HTML/CSS, matches the real app) ── -->
+      <div class="phone-stage reveal delay-2" aria-hidden="true">
+        <div class="float-badge float-badge--top">
+          <i class="fa-solid fa-car"></i> £0.45/mile HMRC
+        </div>
+        <div class="float-badge float-badge--mid">
+          <i class="fa-solid fa-camera"></i> AI Receipt Scanning
+        </div>
+        <div class="float-badge float-badge--bottom">
+          <i class="fa-solid fa-bolt"></i> 7 Free Scans / Month
+        </div>
+
+        <div class="phone">
+          <div class="phone__screen">
+            <div class="mini-header">
+              <div class="mini-brand">
+                <span class="mini-brand__mark"><i class="fa-solid fa-receipt"></i></span>
+                <span>TallyShot</span>
+              </div>
+              <div class="mini-icon-btn"><i class="fa-solid fa-gear"></i></div>
+            </div>
+
+            <div class="mini-card">
+              <div class="mini-card__label">MAY 2026</div>
+              <div class="mini-card__amount">£1,247.50</div>
+              <div class="mini-card__sub">Total expenses</div>
+              <div class="mini-card__stats">
+                <div class="mini-stat">
+                  <div class="mini-stat__value accent">£842.10</div>
+                  <div class="mini-stat__label">Tax Deductible</div>
+                </div>
+                <div class="mini-stat__sep"></div>
+                <div class="mini-stat">
+                  <div class="mini-stat__value">24</div>
+                  <div class="mini-stat__label">Receipts</div>
+                </div>
+                <div class="mini-stat__sep"></div>
+                <div class="mini-stat">
+                  <div class="mini-stat__value">12</div>
+                  <div class="mini-stat__label">Drives</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-banner">
+              <i class="fa-solid fa-crown"></i>
+              <span>5 free AI scans left this month</span>
+              <strong>Upgrade →</strong>
+            </div>
+
+            <div class="mini-quick">
+              <div class="mini-quick__item">
+                <div class="mini-quick__circle"><i class="fa-solid fa-camera"></i></div>
+                <div class="mini-quick__label">Scan</div>
+              </div>
+              <div class="mini-quick__item">
+                <div class="mini-quick__circle"><i class="fa-solid fa-car"></i></div>
+                <div class="mini-quick__label">Drive</div>
+              </div>
+              <div class="mini-quick__item">
+                <div class="mini-quick__circle"><i class="fa-solid fa-folder"></i></div>
+                <div class="mini-quick__label">Reports</div>
+              </div>
+              <div class="mini-quick__item">
+                <div class="mini-quick__circle"><i class="fa-solid fa-arrow-up-right-from-square"></i></div>
+                <div class="mini-quick__label">Export</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       SOCIAL PROOF
+       ════════════════════════════════════════════════════════ -->
+  <section class="proof" aria-label="Social proof">
+    <div class="container">
+      <p class="proof__lead reveal">Trusted by freelancers and small businesses across the UK</p>
+      <div class="stars reveal delay-1" aria-label="5 star rating">
+        <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+      </div>
+      <div class="proof__stats">
+        <div class="reveal delay-1">
+          <div class="stat__value" data-count="10000" data-suffix="+">0</div>
+          <div class="stat__label">Receipts Scanned</div>
+        </div>
+        <div class="reveal delay-2">
+          <div class="stat__value" data-count="500" data-suffix="+">0</div>
+          <div class="stat__label">Active Users</div>
+        </div>
+        <div class="reveal delay-3">
+          <div class="stat__value" data-count="45000" data-prefix="£" data-suffix="+">0</div>
+          <div class="stat__label">Expenses Tracked</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       FEATURES
+       ════════════════════════════════════════════════════════ -->
+  <section id="features">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-eyebrow reveal">Features</span>
+        <h2 class="reveal delay-1">Everything you need to track expenses</h2>
+        <p class="reveal delay-2">Designed from the ground up for the way UK freelancers and small businesses actually work.</p>
+      </div>
+
+      <div class="features__grid" id="features-grid">
+        <article class="feature reveal">
+          <div class="feature__icon" aria-hidden="true">📸</div>
+          <h3>AI Receipt Scanning</h3>
+          <p>Point your camera at any receipt and TallyShot automatically extracts the merchant, date, amount and category in seconds.</p>
+        </article>
+
+        <article class="feature reveal delay-1">
+          <div class="feature__icon" aria-hidden="true">🏎️</div>
+          <h3>GPS Drive Tracking</h3>
+          <p>Start a drive and we track every mile automatically. Get your HMRC mileage reimbursement calculated instantly at 45p per mile.</p>
+        </article>
+
+        <article class="feature reveal delay-2">
+          <div class="feature__icon" aria-hidden="true">🔍</div>
+          <h3>Barcode Scanner</h3>
+          <p>Scan any food or product barcode to see full nutrition info, ingredients and allergens — then log it as a grocery expense in one tap.</p>
+        </article>
+
+        <article class="feature reveal delay-3">
+          <div class="feature__icon" aria-hidden="true">📊</div>
+          <h3>Tax-Ready Reports</h3>
+          <p>Export a professional CSV or PDF report for your accountant at tax time. Every expense organised and categorised automatically.</p>
+        </article>
+
+        <article class="feature reveal delay-4">
+          <div class="feature__icon" aria-hidden="true">✅</div>
+          <h3>Tax-Deductible Tracking</h3>
+          <p>Mark expenses as tax deductible and TallyShot keeps a running total so you always know exactly what you can claim back.</p>
+        </article>
+
+        <article class="feature reveal delay-5">
+          <div class="feature__icon" aria-hidden="true">🔒</div>
+          <h3>Private &amp; Secure</h3>
+          <p>Your receipts and financial data never leave your device without your permission. You stay in control of every number.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       HOW IT WORKS
+       ════════════════════════════════════════════════════════ -->
+  <section id="how">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-eyebrow reveal">How it works</span>
+        <h2 class="reveal delay-1">Three steps to expense freedom</h2>
+        <p class="reveal delay-2">From the moment you swipe your card to the moment you file taxes — TallyShot handles the rest.</p>
+      </div>
+
+      <div class="how__row" id="how-row">
+        <div class="how__line" aria-hidden="true"></div>
+
+        <div class="step reveal">
+          <div class="step__num">
+            <span>1</span>
+            <i class="fa-solid fa-camera" aria-hidden="true"></i>
+          </div>
+          <h3>Scan</h3>
+          <p>Open TallyShot and point your camera at a receipt or product barcode. Works in under a second.</p>
+        </div>
+
+        <div class="step reveal delay-2">
+          <div class="step__num">
+            <span>2</span>
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
+          </div>
+          <h3>Review</h3>
+          <p>Our AI instantly extracts every detail. Confirm or tweak in seconds — most receipts need no edits at all.</p>
+        </div>
+
+        <div class="step reveal delay-4">
+          <div class="step__num">
+            <span>3</span>
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          </div>
+          <h3>Done</h3>
+          <p>Your expense is logged, categorised and ready to export the second your accountant asks for it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       BARCODE SPOTLIGHT
+       ════════════════════════════════════════════════════════ -->
+  <section id="barcode">
+    <div class="container spotlight">
+      <div class="spotlight__copy">
+        <span class="section-eyebrow reveal">Barcode scanner</span>
+        <h2 class="reveal delay-1">Scan any product. Know exactly what you're buying and spending.</h2>
+        <p class="lead reveal delay-2">Live data from Open Food Facts — millions of UK products, allergens flagged in red, and a one-tap path to log the lot as a grocery expense.</p>
+        <ul class="checklist reveal delay-3">
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Full nutrition info and ingredients per 100g</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Allergen warnings highlighted in red</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Nutri-Score grade from A to E at a glance</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Log as grocery expense in one tap</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Works with millions of UK products</span></li>
+        </ul>
+      </div>
+
+      <div class="spotlight__visual reveal delay-2" aria-hidden="true">
+        <div class="barcode-sheet">
+          <div class="barcode-sheet__hero">
+            <div class="barcode-sheet__img"><i class="fa-solid fa-cookie-bite"></i></div>
+            <div>
+              <div class="barcode-sheet__name">Oat &amp; Honey Granola Bar</div>
+              <div class="barcode-sheet__brand">Nature&apos;s Path</div>
+              <div class="barcode-sheet__qty">5 × 40g</div>
+            </div>
+          </div>
+
+          <div class="grade-row">
+            <div class="grade-pill grade-A">
+              <div class="grade-pill__label">NUTRI-SCORE</div>
+              <div class="grade-pill__value">A</div>
+            </div>
+            <div class="grade-pill grade-C">
+              <div class="grade-pill__label">ECO-SCORE</div>
+              <div class="grade-pill__value">C</div>
+            </div>
+            <div class="grade-pill grade-NOVA-3">
+              <div class="grade-pill__label">NOVA</div>
+              <div class="grade-pill__value">3</div>
+            </div>
+          </div>
+
+          <div class="nutri-row">
+            <div class="nutri-pill"><div class="nutri-pill__value">11.0 g</div><div class="nutri-pill__label">Fat</div></div>
+            <div class="nutri-pill"><div class="nutri-pill__value">14.0 g</div><div class="nutri-pill__label">Sugar</div></div>
+            <div class="nutri-pill"><div class="nutri-pill__value">0.10 g</div><div class="nutri-pill__label">Salt</div></div>
+            <div class="nutri-pill"><div class="nutri-pill__value">7.4 g</div><div class="nutri-pill__label">Protein</div></div>
+          </div>
+
+          <div class="allergen-box">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div>
+              <div class="allergen-box__title">ALLERGENS</div>
+              <div class="allergen-box__list">Gluten, Oats, Soybeans</div>
+            </div>
+          </div>
+
+          <div class="sheet-actions">
+            <button class="btn btn--ghost"><i class="fa-solid fa-barcode"></i> Scan another</button>
+            <button class="btn btn--primary"><i class="fa-solid fa-plus"></i> Log as Expense</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       GPS DRIVE TRACKING SPOTLIGHT
+       ════════════════════════════════════════════════════════ -->
+  <section id="drives">
+    <div class="container spotlight spotlight--reverse">
+      <div class="spotlight__copy">
+        <span class="section-eyebrow reveal">GPS mileage</span>
+        <h2 class="reveal delay-1">Every mile tracked. Every penny claimed.</h2>
+        <p class="lead reveal delay-2">Tap Start before you pull off, tap Stop when you arrive — TallyShot does the maths at the live HMRC rate, every time.</p>
+        <ul class="checklist reveal delay-3">
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Live GPS tracking while you drive</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>HMRC rate built in at £0.45 per mile</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Start and end address auto-detected</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Miles and kilometres supported</span></li>
+          <li><span class="check"><i class="fa-solid fa-check"></i></span><span>Instant reimbursement calculation</span></li>
+        </ul>
+      </div>
+
+      <div class="spotlight__visual reveal delay-2" aria-hidden="true">
+        <div class="map-card">
+          <div class="map-card__live"><span class="live-dot"></span> LIVE — TRACKING DRIVE</div>
+          <div class="map-grid">
+            <svg class="route" viewBox="0 0 460 220" preserveAspectRatio="none">
+              <path class="route__path" d="M 55,110 C 130,80 170,160 230,120 C 290,80 340,150 405,72" />
+            </svg>
+            <span class="route__pin route__pin--a"></span>
+            <span class="route__pin route__pin--b"></span>
+          </div>
+          <div class="map-card__stats">
+            <div>
+              <div class="map-stat__value">12.4 mi</div>
+              <div class="map-stat__label">Distance</div>
+            </div>
+            <div class="map-stat__sep"></div>
+            <div>
+              <div class="map-stat__value">0:24:13</div>
+              <div class="map-stat__label">Duration</div>
+            </div>
+            <div class="map-stat__sep"></div>
+            <div>
+              <div class="map-stat__value accent">£5.58</div>
+              <div class="map-stat__label">Allowance</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       PRICING
+       ════════════════════════════════════════════════════════ -->
+  <section id="pricing">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-eyebrow reveal">Pricing</span>
+        <h2 class="reveal delay-1">Simple, honest pricing</h2>
+        <p class="reveal delay-2">Start free. Upgrade when you outgrow the free scans. Cancel any time.</p>
+      </div>
+
+      <div class="pricing__grid">
+        <article class="plan reveal">
+          <div class="plan__name">Free</div>
+          <div class="plan__price"><strong>£0</strong><span>/month</span></div>
+          <ul class="plan__features">
+            <li><i class="fa-solid fa-check"></i> 7 AI receipt scans per month</li>
+            <li><i class="fa-solid fa-check"></i> Unlimited manual entries</li>
+            <li><i class="fa-solid fa-check"></i> GPS drive tracking</li>
+            <li><i class="fa-solid fa-check"></i> Barcode scanning</li>
+            <li><i class="fa-solid fa-check"></i> CSV export</li>
+          </ul>
+          <a href="#download" class="btn btn--ghost plan__cta">Get Started Free</a>
+        </article>
+
+        <article class="plan plan--featured reveal delay-1">
+          <span class="plan__badge">Most Popular</span>
+          <div class="plan__name">Pro</div>
+          <div class="plan__price"><strong>£4.99</strong><span>/month</span></div>
+          <ul class="plan__features">
+            <li><i class="fa-solid fa-check"></i> <strong style="color:var(--text-primary)">Unlimited</strong> AI receipt scans</li>
+            <li><i class="fa-solid fa-check"></i> Everything in Free</li>
+            <li><i class="fa-solid fa-check"></i> PDF reports for accountants</li>
+            <li><i class="fa-solid fa-check"></i> Priority support</li>
+            <li><i class="fa-solid fa-check"></i> No scan limits, ever</li>
+          </ul>
+          <a href="#download" class="btn btn--primary plan__cta">Upgrade to Pro</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       TESTIMONIALS
+       ════════════════════════════════════════════════════════ -->
+  <section id="testimonials">
+    <div class="container">
+      <div class="section-head">
+        <span class="section-eyebrow reveal">Testimonials</span>
+        <h2 class="reveal delay-1">What our users say</h2>
+      </div>
+
+      <div class="testimonials__grid">
+        <article class="testimonial reveal">
+          <div class="testimonial__stars" aria-label="5 stars">★★★★★</div>
+          <p class="testimonial__quote">TallyShot has saved me hours every month. The receipt scanner is incredibly accurate and the export goes straight to my accountant.</p>
+          <div class="testimonial__author">
+            <div class="testimonial__avatar">SM</div>
+            <div>
+              <div class="testimonial__name">Sarah M.</div>
+              <div class="testimonial__role">Freelance Designer, London</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="testimonial reveal delay-1">
+          <div class="testimonial__stars" aria-label="5 stars">★★★★★</div>
+          <p class="testimonial__quote">The mileage tracking alone pays for itself. I claimed back £400 in my first tax return — money I would have missed entirely.</p>
+          <div class="testimonial__author">
+            <div class="testimonial__avatar">JT</div>
+            <div>
+              <div class="testimonial__name">James T.</div>
+              <div class="testimonial__role">Delivery Driver, Manchester</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="testimonial reveal delay-2">
+          <div class="testimonial__stars" aria-label="5 stars">★★★★★</div>
+          <p class="testimonial__quote">Finally an expense app that actually works for UK self-employed people. The HMRC categories are spot on out of the box.</p>
+          <div class="testimonial__author">
+            <div class="testimonial__avatar">PK</div>
+            <div>
+              <div class="testimonial__name">Priya K.</div>
+              <div class="testimonial__role">Consultant, Birmingham</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       DOWNLOAD CTA
+       ════════════════════════════════════════════════════════ -->
+  <section class="download" id="download">
+    <div class="container download__inner">
+      <h2 class="reveal">Start tracking for free today</h2>
+      <p class="reveal delay-1">Free for life on the starter plan — no credit card, no trial timer, no nags.</p>
+      <div class="download__ctas reveal delay-2">
+        <a class="store-btn store-btn--dark" href="#" aria-label="Download for iOS">
+          <i class="fa-brands fa-apple" aria-hidden="true"></i>
+          <span>
+            <span class="store-label">Download on the</span><br />
+            <span class="store-name">App Store</span>
+          </span>
+        </a>
+        <a class="store-btn" href="#" aria-label="Get it on Google Play">
+          <i class="fa-brands fa-google-play" aria-hidden="true"></i>
+          <span>
+            <span class="store-label">GET IT ON</span><br />
+            <span class="store-name">Google Play</span>
+          </span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       FOOTER
+       ════════════════════════════════════════════════════════ -->
+  <footer>
+    <div class="container">
+      <div class="footer__top">
+        <div>
+          <a class="logo" href="#top">
+            <span class="logo__mark"><i class="fa-solid fa-receipt"></i></span>
+            <span>TallyShot</span>
+          </a>
+          <p class="footer__tagline">The UK expense-tracking app built for freelancers, sole traders, and small businesses. Made in Britain.</p>
+        </div>
+        <div class="footer__links" aria-label="Footer links">
+          <a href="#">Privacy Policy</a>
+          <a href="#">Terms of Service</a>
+          <a href="#">Contact</a>
+          <a href="#">Support</a>
+        </div>
+      </div>
+      <div class="footer__bottom">
+        <span>© 2026 TallyShot. Made for UK freelancers and self-employed.</span>
+        <div class="footer__social" aria-label="Social media">
+          <a href="#" aria-label="X (Twitter)"><i class="fa-brands fa-x-twitter"></i></a>
+          <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+          <a href="#" aria-label="LinkedIn"><i class="fa-brands fa-linkedin-in"></i></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ──────────────────────────────────────────────────────────────
+    // NAV: blur background once the user scrolls past the hero edge
+    // ──────────────────────────────────────────────────────────────
+    const nav = document.getElementById('nav');
+    const onScroll = () => nav.classList.toggle('is-scrolled', window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    // ──────────────────────────────────────────────────────────────
+    // Mobile hamburger
+    // ──────────────────────────────────────────────────────────────
+    const hamburger = document.getElementById('hamburger');
+    const mobileMenu = document.getElementById('mobile-menu');
+    hamburger.addEventListener('click', () => {
+      const open = mobileMenu.classList.toggle('is-open');
+      hamburger.setAttribute('aria-expanded', String(open));
+      hamburger.innerHTML = open ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-bars"></i>';
+    });
+    // Close on link tap
+    mobileMenu.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => {
+      mobileMenu.classList.remove('is-open');
+      hamburger.setAttribute('aria-expanded', 'false');
+      hamburger.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    }));
+
+    // ──────────────────────────────────────────────────────────────
+    // Hover-glow position tracker for feature cards. Drives the
+    // radial-gradient `::before` glow toward the cursor so the
+    // hover lift feels reactive instead of static.
+    // ──────────────────────────────────────────────────────────────
+    document.querySelectorAll('.feature').forEach((card) => {
+      card.addEventListener('mousemove', (e) => {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+        card.style.setProperty('--my', `${((e.clientY - r.top)  / r.height) * 100}%`);
+      });
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // Reveal on scroll. IntersectionObserver toggles the .is-visible
+    // class so the CSS transition runs. We unobserve after firing so
+    // the same element doesn't keep re-running on every scroll cycle.
+    // ──────────────────────────────────────────────────────────────
+    const revealObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealObserver.unobserve(entry.target);
+        }
+      }
+    }, { threshold: 0.12, rootMargin: '0px 0px -60px 0px' });
+    document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+
+    // ──────────────────────────────────────────────────────────────
+    // "How it works" connecting line — kick the animation when the
+    // row scrolls into view by adding .is-visible (CSS drives it).
+    // ──────────────────────────────────────────────────────────────
+    const howRow = document.getElementById('how-row');
+    if (howRow) {
+      const howObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            howRow.classList.add('is-visible');
+            howObserver.disconnect();
+          }
+        }
+      }, { threshold: 0.3 });
+      howObserver.observe(howRow);
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Animated stat counters. Easing chosen so the numbers
+    // decelerate at the end — feels like counting "lands".
+    // ──────────────────────────────────────────────────────────────
+    function animateCount(el) {
+      const target = parseInt(el.dataset.count, 10);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const duration = 1600;
+      const start = performance.now();
+      const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+      function tick(now) {
+        const p = Math.min(1, (now - start) / duration);
+        const v = Math.round(target * easeOut(p));
+        el.textContent = prefix + v.toLocaleString('en-GB') + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+    const statObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          animateCount(entry.target);
+          statObserver.unobserve(entry.target);
+        }
+      }
+    }, { threshold: 0.5 });
+    document.querySelectorAll('.stat__value[data-count]').forEach((el) => statObserver.observe(el));
+  </script>
+</body>
+</html>

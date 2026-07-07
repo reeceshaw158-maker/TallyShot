@@ -1,0 +1,203 @@
+export const schedule = {
+  Monday: [
+    { dj: 'E-MIX', time: '6pm–8pm GMT', show: 'RARE ROOTS REGGAE SHOW' },
+    { dj: 'Dean Masters', time: '8pm–10pm GMT', show: 'THE SOUL INFINITY SHOW' },
+  ],
+  Tuesday: [
+    { dj: 'Miss Honey', time: '8am–11am GMT', show: 'MORNING BLEND (House & Soul)' },
+    { dj: 'Floyd W', time: '5pm–8pm GMT', show: 'RARE GROOVE & MORE' },
+    { dj: 'E-MIX', time: '8pm–10pm GMT', show: 'THE SOCA SWITCH' },
+  ],
+  Wednesday: [
+    { dj: 'Simon Titus', time: '6pm–8pm GMT (7pm–9pm CET)', show: 'THE SIMON TITUS SHOW' },
+    { dj: 'E-MIX', time: '8pm–10pm GMT', show: 'DOWN BY LAW HIP HOP DROPS' },
+  ],
+  Thursday: [
+    { dj: 'Dj Bex (The Bex Effect)', time: '2pm–4pm GMT', show: 'LOVE SOUL MOTIVE' },
+    { dj: 'Floyd W', time: '6pm–9pm GMT', show: 'RARE GROOVE & MORE' },
+    { dj: 'Steady Dee', time: '9pm–11pm GMT', show: 'AFROBEAT, DANCEHALL & SOUL' },
+    { dj: 'Fonz', time: '11pm–1am GMT', show: 'REGGAE & SOUL' },
+  ],
+  Friday: [
+    { dj: 'Fonz', time: '5pm–7pm GMT', show: 'SOULFUL HOUSE' },
+    { dj: 'Floyd W', time: '5pm–7pm GMT', show: 'RARE GROOVE & MORE' },
+    { dj: 'Dean Masters (Replay)', time: '7pm–9pm GMT', show: 'THE SOUL INFINITY SHOW' },
+    { dj: 'Culture Mark', time: '9pm–12am GMT', show: 'DEEP & SOULFUL SESSIONS' },
+  ],
+  Saturday: [
+    { dj: 'Fonz', time: '11am–1pm GMT', show: 'REGGAE' },
+    { dj: 'Floyd W', time: '1pm–3pm GMT', show: 'RARE GROOVE & MORE' },
+    { dj: 'Lil Jeff', time: '6pm–9pm GMT', show: 'GROOVE SESSION' },
+    { dj: 'Devon Live', time: '9pm–12am GMT', show: 'ECLECTIC GROOVE' },
+  ],
+  Sunday: [
+    { dj: 'Fonz', time: '11am–1pm GMT', show: 'RAW GROOVE SESSIONS' },
+    { dj: 'E-MIX', time: '1pm–4pm GMT', show: 'RAW GROOVE SESSIONS' },
+    { dj: 'Culture Mark', time: '6pm–8pm GMT', show: 'RAW GROOVE SESSIONS' },
+    { dj: 'Lil Jeff', time: '10pm–12am GMT', show: 'ORIGINAL GET LOOSE MIX SHOW' },
+  ],
+}
+
+export const djs = [
+  {
+    id: 1,
+    name: 'Lil Jeff',
+    show: 'The Original Get Loose Mix Show',
+    genres: ['Club Funk', 'Nu Disco', 'Soul', 'Disco Boogie', 'Soulful House', 'Jazzy House'],
+    bio: "Lil Jeff's musical tastes were forged on the dance floors of London's finest underground black music clubs, reflected in his unique style combining old and new.",
+    schedule: 'Saturday 6pm–9pm | Sunday 10pm–12am GMT',
+    avatar: 'Lil+Jeff',
+  },
+  {
+    id: 2,
+    name: 'Culture Mark',
+    show: 'Deep & Soulful Sessions',
+    genres: ['Deep House', 'Electronic', 'Acoustic'],
+    bio: 'Playing a wide range of electronic/acoustic sounds to set a mood to uplift & inspire the listener.',
+    schedule: 'Friday 9pm–12am | Sunday 6pm–8pm GMT',
+    avatar: 'Culture+Mark',
+  },
+  {
+    id: 3,
+    name: 'Devon Live',
+    show: 'Eclectic Groove Session',
+    genres: ['Soul', 'Funk', 'Jazz', 'Electronic', 'House'],
+    bio: 'With effortless ease DJ DevonLive brings unforgettable Eclectic sounds that cruise through genres.',
+    schedule: 'Saturday 9pm–12am GMT',
+    avatar: 'Devon+Live',
+  },
+  {
+    id: 4,
+    name: 'E-MIX',
+    show: 'Rare Roots, Soca Blitz & Down By Law Hip Hop',
+    genres: ['Reggae', 'Soca', 'Hip Hop', 'Afrobeats'],
+    bio: 'E-MIX brings raw energy and versatility across multiple shows, delivering the best in reggae roots, soca rhythms, and hip hop culture.',
+    schedule: 'Mon 6–8pm (Rare Roots) | Tue 8–10pm (Soca Blitz) | Wed 8–10pm (Hip Hop) | Sun 1–4pm GMT',
+    avatar: 'E-MIX',
+  },
+  {
+    id: 5,
+    name: 'Steady Dee',
+    show: 'Blues Dance Experience',
+    genres: ['Afrobeat', 'Dancehall', 'Soul', 'Reggae'],
+    bio: 'Steady Dee brings the blues dance experience to life every Thursday, weaving together afrobeat, dancehall, and soul into an unforgettable journey.',
+    schedule: 'Thursday 9pm–11pm GMT',
+    avatar: 'Steady+Dee',
+  },
+  {
+    id: 6,
+    name: 'Dean Masters',
+    show: 'Soul Infinity Show',
+    genres: ['Neo Soul'],
+    bio: 'Dean Masters takes you on an infinite soul journey — from classic cuts to contemporary gems, all tied together with a thread of pure soulful excellence.',
+    schedule: 'Monday 8–10pm | Friday 7–9pm GMT (Replay)',
+    avatar: 'Dean+Masters',
+  },
+  {
+    id: 7,
+    name: 'Dj Bex (The Bex Effect)',
+    show: 'Love Soul Motive',
+    genres: ['Pure Dance', 'House', 'Soul'],
+    bio: 'The Bex Effect is real — DJ Bex weaves together pure dance floor energy with soulful house and classic soul to create something truly unique.',
+    schedule: 'Thursday 2pm–4pm GMT',
+    mixcloud: 'https://www.mixcloud.com/BexEffect/',
+    avatar: 'Dj+Bex',
+  },
+  {
+    id: 8,
+    name: 'Simon Titus',
+    show: 'The Simon Titus Show',
+    genres: ['Soul', 'Funk', 'R&B'],
+    bio: 'Simon Titus delivers a carefully curated show reaching listeners across Europe with a blend that transcends borders.',
+    schedule: 'Wednesday 6pm–8pm GMT / 7pm–9pm CET',
+    avatar: 'Simon+Titus',
+  },
+  {
+    id: 9,
+    name: 'Fonz',
+    show: 'Reggae, Soul & Soulful House',
+    genres: ['Reggae', 'Soul', 'Soulful House'],
+    bio: 'Fonz is a fixture of Get Loose Radio, holding down multiple slots across the week with his signature blend of reggae vibes, raw groove, and soulful house.',
+    schedule: 'Thu 11pm–1am | Fri 5–7pm (Soulful House) | Sat 11am–1pm (Reggae) | Sun 11am–1pm GMT',
+    avatar: 'Fonz',
+  },
+  {
+    id: 10,
+    name: 'Floyd W',
+    show: 'Rare Groove & More',
+    genres: ['Reggae', 'Soul', 'RnB'],
+    bio: 'Floyd W digs deep into the crates to deliver rare groove selections that span reggae, soul, and R&B across multiple weekly shows.',
+    schedule: 'Tue 5–8pm | Thu 6–9pm | Sat 1–3pm GMT',
+    avatar: 'Floyd+W',
+  },
+  {
+    id: 11,
+    name: 'Miss Honey',
+    show: 'Morning Blend House & Soul',
+    genres: ['House', 'Soul'],
+    bio: 'Miss Honey kicks off your Tuesday morning with the perfect blend of house and soul — the smoothest way to start your day.',
+    schedule: 'Every Tuesday 8am–11am GMT',
+    mixcloud: 'https://www.mixcloud.com/Lynnnnnmabel',
+    avatar: 'Miss+Honey',
+  },
+]
+
+export const archives = [
+  {
+    id: 1,
+    dj: 'Dj Bex',
+    title: '04/04/2024 Show',
+    date: 'April 4, 2024',
+    genre: 'House / Soul',
+    link: 'https://www.mixcloud.com/BexEffect/',
+    avatar: 'Dj+Bex',
+  },
+  {
+    id: 2,
+    dj: 'Dj Bex',
+    title: 'Retro / Old School',
+    date: 'September 26, 2024',
+    genre: 'Old School',
+    link: 'https://www.mixcloud.com/BexEffect/get-loose-radio-the-bex-effect-20240926-130009/',
+    avatar: 'Dj+Bex',
+  },
+  {
+    id: 3,
+    dj: 'E-Mix',
+    title: 'Rare Roots & Wall Paper Stripper Selection',
+    date: 'September 25, 2023',
+    genre: 'Reggae / Roots',
+    link: 'https://www.mixcloud.com/dj-mcemix/rare-roots-and-wall-paper-stripper-selection-getlooseradiocom-20230925-210318/',
+    avatar: 'E-MIX',
+  },
+]
+
+export const merchandise = [
+  {
+    id: 1,
+    name: 'GLR Classic Tee',
+    price: '€12.00',
+    tag: 'TEE',
+  },
+  {
+    id: 2,
+    name: 'Get Loose Hoodie',
+    price: '€15.00',
+    tag: 'HOODIE',
+  },
+  {
+    id: 3,
+    name: 'Music For Life Cap',
+    price: '€15.00',
+    tag: 'CAP',
+  },
+  {
+    id: 4,
+    name: 'GLR Vinyl Tote Bag',
+    price: '€20.00',
+    tag: 'TOTE',
+  },
+]
+
+export const STREAM_URL = 'https://stream.getlooseradio.com/live'
+export const MERCH_URL = 'https://dezone-shop.fourthwall.com/en-eur/collections/all'

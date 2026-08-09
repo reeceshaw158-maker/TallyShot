@@ -4,18 +4,20 @@
  */
 import { useCallback, useState } from 'react';
 import {
-  View, ScrollView, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator,
+  View, ScrollView, StyleSheet, TouchableOpacity, StatusBar, ActivityIndicator, Image, Alert,
 } from 'react-native';
 import { Text } from 'react-native-paper';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAllReceipts, getMonthlySummary, getNeedsReviewCount, getMonthlyDeductibleTotal } from '../../src/db/receipts';
-import { getDrivesSummary } from '../../src/db/drives';
 import { useThemeTokens, useActiveScheme } from '../../src/theme';
 import { useAppStore, FREE_SCAN_LIMIT } from '../../src/stores/appStore';
 import { MerchantAvatar } from '../../src/components/MerchantAvatar';
+import { AnimatedNumber } from '../../src/components/AnimatedNumber';
+import { FadeSlideCard } from '../../src/components/FadeSlideCard';
 import { Receipt } from '../../src/types';
+import { getRecentProducts, clearAllProductScans, deleteProductScan, ProductRecord } from '../../src/services/productCache';
 
 function currentYM() {
   return new Date().toLocaleDateString('en-CA').slice(0, 7);
@@ -36,30 +38,66 @@ export default function DashboardScreen() {
   const [receiptCount, setReceiptCount] = useState(0);
   const [needsReview, setNeedsReview] = useState(0);
   const [recent, setRecent] = useState<Receipt[]>([]);
-  const [drivesKm, setDrivesKm] = useState(0);
-  const [drivesCount, setDrivesCount] = useState(0);
+  const [topCategory, setTopCategory] = useState<{ category: string; total: number } | null>(null);
+  const [recentProducts, setRecentProducts] = useState<ProductRecord[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     const ym = currentYM();
-    const [summary, ded, all, review, drv] = await Promise.all([
+    const [summary, ded, all, review, products] = await Promise.all([
       getMonthlySummary(ym),
       getMonthlyDeductibleTotal(ym),
       getAllReceipts({ includeArchived: false }),
       getNeedsReviewCount(),
-      getDrivesSummary(),
+      getRecentProducts(8),
     ]);
     setMonthTotal(summary.total);
     setDeductibleTotal(ded.total);
     setReceiptCount(all.length);
     setNeedsReview(review);
     setRecent(all.slice(0, 5));
-    setDrivesKm(drv.totalKm);
-    setDrivesCount(drv.count);
+    setTopCategory(summary.byCategory[0] ?? null);
+    setRecentProducts(products);
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  const handleClearRecentScans = () => {
+    Alert.alert(
+      'Clear recent scans?',
+      'This removes your barcode scan history from this device. Your receipts are not affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear all',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllProductScans();
+            setRecentProducts([]);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteScan = (barcode: string, name: string | null) => {
+    Alert.alert(
+      'Remove this scan?',
+      name ? `Remove "${name}" from your recent scans?` : 'Remove this item from your recent scans?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteProductScan(barcode);
+            setRecentProducts((prev) => prev.filter((p) => p.barcode !== barcode));
+          },
+        },
+      ]
+    );
+  };
 
   const fmt = (n: number) => {
     try {
@@ -74,10 +112,11 @@ export default function DashboardScreen() {
   // All quick actions use the primary green accent on a dark surface — brief
   // spec: "#1A1A1A background with #00C896 icons". Consistency over variety.
   const quickActions = [
-    { icon: 'camera-plus', label: 'Scan',      onPress: () => router.push('/capture') },
-    { icon: 'car',         label: 'Add Drive', onPress: () => router.push('/(tabs)/drives') },
-    { icon: 'folder-outline', label: 'Reports', onPress: () => router.push('/reports' as any) },
-    { icon: 'export-variant', label: 'Export',  onPress: () => router.push('/export') },
+    { icon: 'camera-outline',  label: 'Receipt',  onPress: () => router.push('/capture') },
+    { icon: 'barcode-scan',    label: 'Barcode',  onPress: () => router.push('/scan/product') },
+    { icon: 'folder-outline',             label: 'Reports',  onPress: () => router.push('/reports' as any) },
+    { icon: 'export-variant',             label: 'Export',   onPress: () => router.push('/export') },
+    { icon: 'archive-outline',            label: 'Archive',  onPress: () => router.push('/archived') },
   ];
 
   return (
@@ -106,6 +145,7 @@ export default function DashboardScreen() {
 
         {/* ── Needs Review banner ── (left accent border per design spec) */}
         {needsReview > 0 && (
+          <FadeSlideCard delay={60}>
           <TouchableOpacity
             style={[
               styles.reviewBanner,
@@ -120,14 +160,20 @@ export default function DashboardScreen() {
             </Text>
             <MaterialCommunityIcons name="chevron-right" size={18} color={t.textMuted} />
           </TouchableOpacity>
+          </FadeSlideCard>
         )}
 
         {/* ── Financials card ──
             Dark card with green accent highlights on the amount + stat values.
             Stats row separated by #2A2A2A dividers (border token). */}
+        <FadeSlideCard delay={80}>
         <View style={[styles.financialsCard, { backgroundColor: t.surface, borderColor: t.border }]}>
           <Text style={[styles.financialsLabel, { color: t.textMuted }]}>{monthLabel.toUpperCase()}</Text>
-          <Text style={[styles.financialsAmount, { color: t.textPrimary }]}>{fmt(monthTotal)}</Text>
+          <AnimatedNumber
+            value={monthTotal}
+            formatter={fmt}
+            style={[styles.financialsAmount, { color: t.textPrimary }]}
+          />
           <Text style={[styles.financialsSub, { color: t.textMuted }]}>Total expenses</Text>
           <View style={[styles.financialsRow, { backgroundColor: t.background, borderColor: t.border }]}>
             <View style={styles.financialsStat}>
@@ -139,17 +185,37 @@ export default function DashboardScreen() {
               <Text style={[styles.financialsStatValue, { color: t.textPrimary }]}>{receiptCount}</Text>
               <Text style={[styles.financialsStatLabel, { color: t.textMuted }]}>Receipts</Text>
             </View>
-            <View style={[styles.financialsStatDivider, { backgroundColor: t.border }]} />
-            <View style={styles.financialsStat}>
-              <Text style={[styles.financialsStatValue, { color: t.textPrimary }]}>{drivesCount}</Text>
-              <Text style={[styles.financialsStatLabel, { color: t.textMuted }]}>Drives</Text>
-            </View>
           </View>
         </View>
+        </FadeSlideCard>
+
+        {/* ── Top category insight ── */}
+        {topCategory && monthTotal > 0 && (
+          <FadeSlideCard delay={140}>
+          <TouchableOpacity
+            style={[styles.insightCard, { backgroundColor: t.surface, borderColor: t.border }]}
+            onPress={() => router.push('/(tabs)/stats')}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="chart-pie" size={18} color={t.accent} />
+            <Text style={[styles.insightText, { color: t.textPrimary }]}>
+              Top spend:{' '}
+              <Text style={{ color: t.cta, fontFamily: 'Inter_600SemiBold' }}>
+                {topCategory.category}
+              </Text>
+              {' '}· {fmt(topCategory.total)}
+            </Text>
+            <Text style={[styles.insightPct, { color: t.textMuted }]}>
+              {Math.round((topCategory.total / monthTotal) * 100)}%
+            </Text>
+          </TouchableOpacity>
+          </FadeSlideCard>
+        )}
 
         {/* ── Scan limit banner (free users) ──
             Left green accent border, dark card body — visually distinct as required. */}
         {!isPro && (
+          <FadeSlideCard delay={160}>
           <TouchableOpacity
             style={[
               styles.limitPill,
@@ -164,13 +230,15 @@ export default function DashboardScreen() {
             </Text>
             <Text style={[styles.limitUpgrade, { color: t.cta }]}>Upgrade →</Text>
           </TouchableOpacity>
+          </FadeSlideCard>
         )}
 
         {/* ── Quick actions ── */}
+        <FadeSlideCard delay={200}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: t.textSubtle }]}>QUICK ACTIONS</Text>
         </View>
-        <View style={styles.quickRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
           {quickActions.map((a) => (
             <TouchableOpacity
               key={a.label}
@@ -179,36 +247,69 @@ export default function DashboardScreen() {
               activeOpacity={0.7}
             >
               <View style={[styles.quickCircle, { backgroundColor: t.surface, borderColor: t.border }]}>
-                <MaterialCommunityIcons name={a.icon as any} size={24} color={t.cta} />
+                <MaterialCommunityIcons name={a.icon as any} size={22} color={t.cta} />
               </View>
-              <Text style={[styles.quickLabel, { color: t.textMuted }]}>{a.label}</Text>
+              <Text style={[styles.quickLabel, { color: t.textMuted }]} numberOfLines={1}>{a.label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
+        </FadeSlideCard>
 
-        {/* ── Drives summary card ── */}
-        {drivesCount > 0 && (
-          <TouchableOpacity
-            style={[styles.drivesCard, { backgroundColor: t.surface, borderColor: t.border }]}
-            onPress={() => router.push('/(tabs)/drives')}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.drivesIcon, { backgroundColor: t.cta + '22' }]}>
-              <MaterialCommunityIcons name="car" size={22} color={t.cta} />
+        {/* ── Recently scanned products ── */}
+        {recentProducts.length > 0 && (
+          <FadeSlideCard delay={260}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: t.textSubtle }]}>RECENT SCANS</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <TouchableOpacity onPress={handleClearRecentScans} hitSlop={12}>
+                <MaterialCommunityIcons name="delete-outline" size={18} color={t.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/scan/product')} hitSlop={12}>
+                <Text style={[styles.seeAll, { color: t.cta }]}>Scan more</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.drivesTitle, { color: t.textPrimary }]}>
-                {drivesCount} drive{drivesCount !== 1 ? 's' : ''} recorded
-              </Text>
-              <Text style={[styles.drivesSub, { color: t.textMuted }]}>
-                {drivesKm.toFixed(1)} km · {(drivesKm * 0.621371).toFixed(1)} mi total
-              </Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={t.textMuted} />
-          </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productRow}>
+            {recentProducts.map((p) => {
+              const gradeColors: Record<string, string> = { a: '#00C896', b: '#85BB2F', c: '#FFCC00', d: '#FF8C00', e: '#FF4757' };
+              const gradeColor = p.nutriscore ? gradeColors[p.nutriscore] : t.border;
+              return (
+                <TouchableOpacity
+                  key={p.barcode}
+                  style={[styles.productCard, { backgroundColor: t.surface, borderColor: t.border }]}
+                  onPress={() => router.push(`/scan/result/${p.barcode}` as any)}
+                  onLongPress={() => handleDeleteScan(p.barcode, p.name)}
+                  delayLongPress={500}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.productImageWrap, { backgroundColor: t.surfaceElevated }]}>
+                    {p.imageUrl ? (
+                      <Image source={{ uri: p.imageUrl }} style={styles.productImage} resizeMode="contain" />
+                    ) : (
+                      <MaterialCommunityIcons name="package-variant" size={28} color={t.textSubtle} />
+                    )}
+                  </View>
+                  {p.nutriscore && (
+                    <View style={[styles.productGrade, { backgroundColor: gradeColor }]}>
+                      <Text style={styles.productGradeText}>{p.nutriscore.toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.productName, { color: t.textPrimary }]} numberOfLines={2}>
+                    {p.name ?? 'Product'}
+                  </Text>
+                  <Text style={[styles.productBrand, { color: t.textMuted }]} numberOfLines={1}>
+                    {p.brand ?? p.quantity ?? ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          </FadeSlideCard>
         )}
 
         {/* ── Recent receipts ── */}
+        <FadeSlideCard delay={280}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: t.textSubtle }]}>RECENT RECEIPTS</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/stats')} hitSlop={12}>
@@ -272,6 +373,7 @@ export default function DashboardScreen() {
             })}
           </View>
         )}
+        </FadeSlideCard>
       </ScrollView>
     </View>
   );
@@ -332,6 +434,15 @@ const styles = StyleSheet.create({
   },
   financialsStatDivider: { width: 1 },
 
+  insightCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: 16, marginBottom: 10,
+    paddingHorizontal: 14, paddingVertical: 11,
+    borderRadius: 14, borderWidth: 1,
+  },
+  insightText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 13 },
+  insightPct: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+
   limitPill: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     marginHorizontal: 16, marginBottom: 12,
@@ -349,25 +460,36 @@ const styles = StyleSheet.create({
   seeAll: { fontFamily: 'Inter_600SemiBold', fontSize: 13 },
 
   quickRow: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingHorizontal: 12, marginBottom: 4,
+    flexDirection: 'row',
+    paddingHorizontal: 16, paddingBottom: 4, gap: 10,
   },
-  quickItem: { alignItems: 'center', gap: 8, width: 72 },
-  // Quick action: dark square card per spec, green icon.
+  quickItem: { alignItems: 'center', gap: 8, width: 64 },
   quickCircle: {
-    width: 60, height: 60, borderRadius: 16, borderWidth: 1,
+    width: 56, height: 56, borderRadius: 16, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  quickLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, textAlign: 'center' },
+  quickLabel: { fontFamily: 'Inter_500Medium', fontSize: 10, textAlign: 'center' },
 
-  drivesCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    marginHorizontal: 16, marginTop: 12, marginBottom: 4,
-    borderRadius: 16, borderWidth: 1, padding: 14,
+  productRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16, paddingBottom: 4, gap: 10,
   },
-  drivesIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  drivesTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
-  drivesSub: { fontFamily: 'Inter_400Regular', fontSize: 12, marginTop: 2 },
+  productCard: {
+    width: 120, borderRadius: 14, borderWidth: 1, padding: 10, gap: 6, position: 'relative',
+  },
+  productImageWrap: {
+    width: '100%', aspectRatio: 1, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 2,
+  },
+  productGrade: {
+    position: 'absolute', top: 8, right: 8,
+    width: 22, height: 22, borderRadius: 6,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  productGradeText: { fontFamily: 'Inter_800ExtraBold', fontSize: 11, color: '#0F0F0F' },
+  productImage: { width: '100%', height: '100%', borderRadius: 10 },
+  productName: { fontFamily: 'Inter_600SemiBold', fontSize: 12, lineHeight: 16 },
+  productBrand: { fontFamily: 'Inter_400Regular', fontSize: 11 },
 
   recentCard: {
     marginHorizontal: 16, borderRadius: 16, borderWidth: 1, overflow: 'hidden',

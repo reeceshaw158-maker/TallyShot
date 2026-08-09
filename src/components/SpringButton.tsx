@@ -35,10 +35,10 @@ export function SpringButton({
 
   const handlePressIn = useCallback(() => {
     Animated.spring(scale, {
-      toValue: 0.96,
+      toValue: 0.94,
       useNativeDriver: true,
-      tension: 300,
-      friction: 20,
+      tension: 500,
+      friction: 18,
     }).start();
   }, [scale]);
 
@@ -46,8 +46,8 @@ export function SpringButton({
     Animated.spring(scale, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 300,
-      friction: 20,
+      tension: 350,
+      friction: 12,
     }).start();
   }, [scale]);
 

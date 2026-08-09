@@ -1,24 +1,12 @@
-/**
- * Capture screen — Step 2b
- *
- * Launches the native ML Kit Document Scanner (Android) / VisionKit (iOS)
- * which handles real-time edge detection, bounding-box overlay, auto-capture,
- * and perspective correction natively. We own the wrapper UI: branding,
- * flash option, gallery fallback, close button.
- *
- * Flow:
- *   FAB tap → this screen → native scanner launches immediately
- *   → scanner returns cropped image URI → /processing
- */
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, StatusBar, Alert,
-  ActivityIndicator,
+  Animated, Easing, Dimensions, ActivityIndicator, Linking,
 } from 'react-native';
 import { Text } from 'react-native-paper';
-import DocumentScanner, { ResponseType } from 'react-native-document-scanner-plugin';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,74 +14,133 @@ import { useAppStore, FREE_SCAN_LIMIT } from '../src/stores/appStore';
 import { prewarmWorker } from '../src/services/extraction';
 import { hapticMedium, hapticLight } from '../src/utils/haptics';
 import { useThemeTokens } from '../src/theme';
+import { SpringButton } from '../src/components/SpringButton';
+
+const { width: SW } = Dimensions.get('window');
+const DOC_W  = SW * 0.80;
+const DOC_H  = DOC_W * 1.34;
+const CORNER_LEN   = 32;
+const CORNER_THICK = 3;
+const CORNER_R     = 16;
+const SPREAD_PX    = 20;
 
 export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
-  const t = useThemeTokens();
-  const isPro = useAppStore((s) => s.isPro);
+  const t      = useThemeTokens();
+  const isPro             = useAppStore((s) => s.isPro);
   const scansUsedThisMonth = useAppStore((s) => s.scansUsedThisMonth);
   const canScan = isPro || scansUsedThisMonth < FREE_SCAN_LIMIT;
 
-  const [launching, setLaunching] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [busy, setBusy]         = useState(false);
+  const [docReady, setDocReady] = useState(false);
+  const cameraRef = useRef<CameraView>(null);
 
-  // Pre-warm AI worker so processing feels instant after scan.
-  useEffect(() => { prewarmWorker(); }, []);
+  // ── Animations ──────────────────────────────────────────────────────────────
+  const cornerSpread = useRef(new Animated.Value(1)).current;
+  const scanLine     = useRef(new Animated.Value(0)).current;
+  const cornerPulse  = useRef(new Animated.Value(0.65)).current;
+  const badgeFade    = useRef(new Animated.Value(0)).current;
+  const shutterScale = useRef(new Animated.Value(1)).current;
+  const detectedGlow = useRef(new Animated.Value(0)).current;
 
-  // ── Save image to persistent app storage ────────────────────────────────
+  useFocusEffect(
+    useCallback(() => { prewarmWorker(); }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      Animated.timing(badgeFade, {
+        toValue: 1, duration: 600, delay: 200, useNativeDriver: true,
+      }).start();
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanLine, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+          Animated.timing(scanLine, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => anim.stop();
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(cornerPulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
+          Animated.timing(cornerPulse, { toValue: 0.45, duration: 900, useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => anim.stop();
+    }, [])
+  );
+
+  // ── Cosmetic "AI framing" guide — purely visual, doesn't gate capture ───────
+  useFocusEffect(
+    useCallback(() => {
+      setDocReady(false);
+      cornerSpread.setValue(1);
+      detectedGlow.setValue(0);
+      const timer = setTimeout(() => {
+        setDocReady(true);
+        hapticLight();
+        Animated.spring(cornerSpread, { toValue: 0, tension: 55, friction: 9, useNativeDriver: true }).start();
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(detectedGlow, { toValue: 1,   duration: 800, useNativeDriver: true }),
+            Animated.timing(detectedGlow, { toValue: 0.2, duration: 800, useNativeDriver: true }),
+          ])
+        ).start();
+      }, 1800);
+      return () => clearTimeout(timer);
+    }, [])
+  );
+
+  // ── Save helper ─────────────────────────────────────────────────────────────
   const saveImage = async (uri: string): Promise<string> => {
-    const dir = `${FileSystem.documentDirectory}receipts/`;
+    const dir  = `${FileSystem.documentDirectory}receipts/`;
     await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
     const dest = `${dir}receipt_${Date.now()}.jpg`;
     await FileSystem.copyAsync({ from: uri, to: dest });
     return dest;
   };
 
-  // ── Native document scanner ──────────────────────────────────────────────
-  const launchScanner = useCallback(async () => {
-    if (!canScan || launching) return;
-    setLaunching(true);
-    hapticLight();
+  // ── Capture a photo with the in-app camera ──────────────────────────────────
+  const takePhoto = useCallback(async () => {
+    if (!canScan || busy || !cameraRef.current) return;
+    setBusy(true);
+    hapticMedium();
+
+    Animated.sequence([
+      Animated.timing(shutterScale, { toValue: 0.88, duration: 70,  useNativeDriver: true }),
+      Animated.timing(shutterScale, { toValue: 1,    duration: 120, useNativeDriver: true }),
+    ]).start();
+
     try {
-      const { scannedImages, status } = await DocumentScanner.scanDocument({
-        responseType: ResponseType.ImageFilePath,
-        maxNumDocuments: 5,       // multi-page receipts
-      });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (!photo?.uri) throw new Error('No photo captured');
 
-      if (status === 'cancel' || !scannedImages?.length) {
-        // User cancelled — go back
-        router.back();
-        return;
-      }
-
+      const savedUri = await saveImage(photo.uri);
       hapticMedium();
-      const savedUri = await saveImage(scannedImages[0]);
-
-      // Additional pages stored separately (multi-page receipts — Step 9)
-      const additionalUris: string[] = [];
-      for (const uri of scannedImages.slice(1)) {
-        additionalUris.push(await saveImage(uri));
-      }
-
       router.replace({
         pathname: '/processing',
-        params: {
-          imageUri: savedUri,
-          additionalImages: JSON.stringify(additionalUris),
-        },
+        params: { imageUri: savedUri, additionalImages: '[]' },
       });
     } catch (err: any) {
-      Alert.alert('Scanner error', err?.message ?? 'Could not launch scanner. Please try again.');
-      setLaunching(false);
+      Alert.alert('Camera error', err?.message ?? 'Could not capture photo. Please try again.');
+    } finally {
+      setBusy(false);
     }
-  }, [canScan, launching]);
+  }, [canScan, busy]);
 
-  // Launch scanner automatically when the screen mounts.
-  useEffect(() => {
-    const t = setTimeout(launchScanner, 150); // slight delay avoids nav animation jank
-    return () => clearTimeout(t);
-  }, []);
-
-  // ── Gallery fallback ────────────────────────────────────────────────────
+  // ── Gallery ─────────────────────────────────────────────────────────────────
   const handleGallery = async () => {
     if (!canScan) return;
     hapticLight();
@@ -112,59 +159,150 @@ export default function CaptureScreen() {
     }
   };
 
-  // ── While scanner is launching show a branded loading screen ────────────
+  // ── Derived animation values ─────────────────────────────────────────────────
+  const spreadTL  = cornerSpread.interpolate({ inputRange: [0, 1], outputRange: [0, -SPREAD_PX] });
+  const spreadBR  = cornerSpread.interpolate({ inputRange: [0, 1], outputRange: [0,  SPREAD_PX] });
+  const scanLineY = scanLine.interpolate({ inputRange: [0, 1], outputRange: [0, DOC_H - 2] });
+
+  const frameColor = docReady ? '#00C896' : 'rgba(255,255,255,0.5)';
+  const aiLabel    = busy
+    ? 'CAPTURING...'
+    : docReady
+      ? 'READY TO CAPTURE ✓'
+      : 'AI SCANNING FOR RECEIPT...';
+  const aiColor = docReady ? '#00C896' : 'rgba(255,255,255,0.75)';
+
+  // ── Permission gates ─────────────────────────────────────────────────────────
+  if (!permission) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  }
+  if (!permission.granted) {
+    const canAsk = permission.canAskAgain;
+    return (
+      <View style={[styles.container, styles.permWrap, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
+        <MaterialCommunityIcons name="camera-off-outline" size={64} color="rgba(255,255,255,0.4)" />
+        <Text style={styles.permTitle}>Camera permission needed</Text>
+        <Text style={styles.permBody}>
+          TallyShot uses the camera to scan receipts. We only access it on this screen.
+        </Text>
+        <SpringButton
+          style={[styles.permCta, { backgroundColor: t.cta }]}
+          onPress={async () => {
+            if (canAsk) await requestPermission();
+            else await Linking.openSettings();
+          }}
+        >
+          <Text style={[styles.permCtaText, { color: t.ctaText }]}>
+            {canAsk ? 'Allow camera' : 'Open settings'}
+          </Text>
+        </SpringButton>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 12, marginTop: 4 }} hitSlop={12}>
+          <Text style={{ color: 'rgba(255,255,255,0.6)' }}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
-      {/* Top bar */}
+      {/* Live camera preview */}
+      <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+
+      {/* Vignette */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={styles.vigTop} />
+        <View style={{ flex: 1 }} />
+        <View style={styles.vigBottom} />
+      </View>
+
+      {/* ── Top bar ── */}
       <View style={[styles.topBar, { paddingTop: 52 + insets.top }]}>
-        <TouchableOpacity
-          style={styles.iconBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
+        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()} hitSlop={12}>
           <MaterialCommunityIcons name="close" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Scan Receipt</Text>
-        <View style={styles.iconBtn} />
+
+        <Animated.View style={[styles.aiBadge, { opacity: badgeFade }]}>
+          <View style={[styles.aiDot, { backgroundColor: docReady ? '#00C896' : t.accent }]} />
+          <Text style={[styles.aiBadgeText, { color: aiColor }]}>{aiLabel}</Text>
+        </Animated.View>
+
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => { hapticLight(); router.push('/scan/product'); }}
+          hitSlop={12}
+        >
+          <MaterialCommunityIcons name="barcode-scan" size={22} color="rgba(255,255,255,0.75)" />
+        </TouchableOpacity>
       </View>
 
-      {/* Phase 1 entry to product barcode scanner */}
-      <TouchableOpacity
-        onPress={() => { hapticLight(); router.push('/scan/product'); }}
-        activeOpacity={0.85}
-        style={[
-          styles.productJump,
-          { backgroundColor: t.surface + 'E6', borderColor: t.border },
-        ]}
-      >
-        <MaterialCommunityIcons name="barcode-scan" size={18} color={t.accent} />
-        <Text style={[styles.productJumpText, { color: t.textPrimary }]}>
-          Or scan a product barcode
-        </Text>
-        <MaterialCommunityIcons name="chevron-right" size={18} color={t.textMuted} />
-      </TouchableOpacity>
+      {/* ── Document framing overlay ── */}
+      <View style={styles.frameWrap} pointerEvents="none">
 
-      {/* Centre — loading state while scanner launches */}
-      <View style={styles.centre}>
-        {launching ? (
-          <>
-            <ActivityIndicator size="large" color={t.accent} />
-            <Text style={styles.hint}>Opening scanner…</Text>
-          </>
-        ) : (
-          <>
-            <MaterialCommunityIcons name="camera-plus-outline" size={72} color="rgba(255,255,255,0.25)" />
-            <Text style={styles.hint}>Position your receipt in good light</Text>
-            <Text style={styles.subHint}>
-              The scanner will find the edges automatically
-            </Text>
-          </>
+        {docReady && (
+          <Animated.View
+            style={[
+              styles.glowRing,
+              { width: DOC_W + 24, height: DOC_H + 24, opacity: detectedGlow, borderColor: '#00C896' },
+            ]}
+          />
         )}
+
+        <View style={[styles.docFrame, { width: DOC_W, height: DOC_H }]}>
+
+          <Animated.View style={[
+            styles.corner, styles.cornerTL,
+            { borderColor: frameColor, opacity: cornerPulse, transform: [{ translateX: spreadTL }, { translateY: spreadTL }] },
+          ]} />
+          <Animated.View style={[
+            styles.corner, styles.cornerTR,
+            { borderColor: frameColor, opacity: cornerPulse, transform: [{ translateX: spreadBR }, { translateY: spreadTL }] },
+          ]} />
+          <Animated.View style={[
+            styles.corner, styles.cornerBL,
+            { borderColor: frameColor, opacity: cornerPulse, transform: [{ translateX: spreadTL }, { translateY: spreadBR }] },
+          ]} />
+          <Animated.View style={[
+            styles.corner, styles.cornerBR,
+            { borderColor: frameColor, opacity: cornerPulse, transform: [{ translateX: spreadBR }, { translateY: spreadBR }] },
+          ]} />
+
+          <Animated.View
+            style={[
+              styles.scanLaser,
+              {
+                backgroundColor: docReady ? '#00C896' : t.accent,
+                shadowColor:     docReady ? '#00C896' : t.accent,
+                transform: [{ translateY: scanLineY }],
+              },
+            ]}
+          />
+        </View>
+
+        <Text style={[styles.frameHint, { color: docReady ? '#00C896' : 'rgba(255,255,255,0.65)' }]}>
+          {busy
+            ? 'Saving photo…'
+            : docReady
+              ? 'Tap Capture when the receipt fills the frame'
+              : 'Point camera at a receipt'}
+        </Text>
+
+        <View style={styles.instructionRow}>
+          {['Fill the frame', 'Good light', 'Hold steady'].map((label) => (
+            <View key={label} style={styles.pill}>
+              <Text style={styles.pillText}>{label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-      {/* Limit banner */}
+      {/* Scan limit banner */}
       {!canScan && (
         <TouchableOpacity
           style={styles.limitBanner}
@@ -177,35 +315,35 @@ export default function CaptureScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Bottom actions */}
+      {/* ── Bottom bar ── */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(40, 16 + insets.bottom) }]}>
-        {/* Gallery */}
-        <TouchableOpacity
-          style={styles.sideBtn}
-          onPress={handleGallery}
-          disabled={!canScan}
-          activeOpacity={0.75}
-        >
-          <MaterialCommunityIcons name="image-multiple-outline" size={28} color={canScan ? '#fff' : 'rgba(255,255,255,0.3)'} />
+
+        <TouchableOpacity style={styles.sideBtn} onPress={handleGallery} activeOpacity={0.75}>
+          <MaterialCommunityIcons
+            name="image-multiple-outline"
+            size={28}
+            color={canScan ? '#fff' : 'rgba(255,255,255,0.3)'}
+          />
           <Text style={[styles.sideBtnLabel, !canScan && { opacity: 0.3 }]}>Gallery</Text>
         </TouchableOpacity>
 
-        {/* Main scan button — re-launches scanner if user returned without scanning */}
-        <TouchableOpacity
-          style={[styles.shutter, !canScan && { opacity: 0.35 }]}
-          onPress={launchScanner}
-          disabled={!canScan || launching}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.shutterRing, { borderColor: t.cta }]}>
-            {launching
-              ? <ActivityIndicator size="small" color={t.accent} />
-              : <View style={[styles.shutterInner, { backgroundColor: t.cta }]} />
-            }
-          </View>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+          <TouchableOpacity
+            style={[styles.shutter, (!canScan || busy) && { opacity: 0.35 }]}
+            onPress={takePhoto}
+            disabled={!canScan || busy}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.shutterRing, { borderColor: docReady ? '#00C896' : t.cta }]}>
+              {busy ? (
+                <ActivityIndicator color={docReady ? '#00C896' : t.cta} />
+              ) : (
+                <View style={[styles.shutterInner, { backgroundColor: docReady ? '#00C896' : t.cta }]} />
+              )}
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
 
-        {/* Manual entry */}
         <TouchableOpacity
           style={styles.sideBtn}
           onPress={() => router.push({ pathname: '/review/[id]', params: { id: 'new' } })}
@@ -220,118 +358,89 @@ export default function CaptureScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
+  container: { flex: 1, backgroundColor: '#080c10' },
+
+  permWrap: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 14 },
+  permTitle: { fontFamily: 'Inter_700Bold', fontSize: 20, marginTop: 8, textAlign: 'center', color: '#fff' },
+  permBody: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, textAlign: 'center', color: 'rgba(255,255,255,0.7)' },
+  permCta: { marginTop: 16, paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14, minWidth: 200, alignItems: 'center' },
+  permCtaText: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+
+  vigTop:    { height: '18%', backgroundColor: 'rgba(0,0,0,0.65)' },
+  vigBottom: { height: '28%', backgroundColor: 'rgba(0,0,0,0.65)' },
+
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  topTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 0.3,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 10,
   },
   iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  centre: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-    paddingHorizontal: 40,
+
+  aiBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 100, borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  hint: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 16,
-    fontFamily: 'Inter_500Medium',
-    textAlign: 'center',
-    marginTop: 8,
+  aiDot:      { width: 7, height: 7, borderRadius: 3.5 },
+  aiBadgeText:{ fontFamily: 'Inter_600SemiBold', fontSize: 10, letterSpacing: 0.7 },
+
+  frameWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center', gap: 14,
   },
-  subHint: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    textAlign: 'center',
-    lineHeight: 18,
+  glowRing: {
+    position: 'absolute', borderRadius: CORNER_R + 8, borderWidth: 1.5,
   },
-  limitBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(220,50,50,0.85)',
-    marginHorizontal: 20,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  limitText: {
-    color: '#fff',
-    fontSize: 13,
-    fontFamily: 'Inter_400Regular',
-    flex: 1,
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 40,
-    paddingTop: 20,
-  },
-  sideBtn: {
-    alignItems: 'center',
-    gap: 5,
-    width: 64,
-  },
-  sideBtnLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
-    fontFamily: 'Inter_400Regular',
-  },
-  shutter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    // borderColor comes from theme tokens (t.cta) — applied inline above
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    // backgroundColor comes from theme tokens (t.cta) — applied inline above
-  },
-  productJump: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    alignSelf: 'center',
-    marginTop: 4,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
+  docFrame: {
+    borderRadius: CORNER_R,
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    overflow: 'hidden',
+    position: 'relative',
   },
-  productJumpText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+
+  corner:     { position: 'absolute', width: CORNER_LEN, height: CORNER_LEN },
+  cornerTL:   { top: -1,    left: -1,  borderTopWidth: CORNER_THICK,    borderLeftWidth: CORNER_THICK,  borderTopLeftRadius: CORNER_R },
+  cornerTR:   { top: -1,    right: -1, borderTopWidth: CORNER_THICK,    borderRightWidth: CORNER_THICK, borderTopRightRadius: CORNER_R },
+  cornerBL:   { bottom: -1, left: -1,  borderBottomWidth: CORNER_THICK, borderLeftWidth: CORNER_THICK,  borderBottomLeftRadius: CORNER_R },
+  cornerBR:   { bottom: -1, right: -1, borderBottomWidth: CORNER_THICK, borderRightWidth: CORNER_THICK, borderBottomRightRadius: CORNER_R },
+
+  scanLaser: {
+    position: 'absolute', left: 20, right: 20, height: 1.5, borderRadius: 1,
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 10, elevation: 6,
   },
+
+  frameHint: {
+    fontFamily: 'Inter_600SemiBold', fontSize: 13, textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 8,
+  },
+  instructionRow: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  pill: {
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  pillText: { fontFamily: 'Inter_400Regular', fontSize: 10, color: 'rgba(255,255,255,0.5)' },
+
+  limitBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(220,50,50,0.85)',
+    marginHorizontal: 20, padding: 12, borderRadius: 12, marginBottom: 12,
+  },
+  limitText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_400Regular', flex: 1 },
+
+  bottomBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 40, paddingTop: 20,
+  },
+  sideBtn:      { alignItems: 'center', gap: 5, width: 64 },
+  sideBtnLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontFamily: 'Inter_400Regular' },
+  shutter:      { alignItems: 'center', justifyContent: 'center' },
+  shutterRing:  { width: 80, height: 80, borderRadius: 40, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
+  shutterInner: { width: 64, height: 64, borderRadius: 32 },
 });

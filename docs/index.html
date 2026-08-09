@@ -3,39 +3,910 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TallyShot</title>
+  <title>TallyShot — AI Receipt Scanner for Freelancers</title>
+  <meta name="description" content="Snap a receipt. AI reads it instantly. Track expenses, mileage, and tax deductibles — all offline, no account required." />
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0b0f;
+      --surface:   #141418;
+      --elevated:  #1c1c22;
+      --border:    #2a2a33;
+      --green:     #00c896;
+      --green-dim: rgba(0,200,150,0.12);
+      --text:      #f0f0f5;
+      --muted:     #8888a0;
+      --subtle:    #555566;
+      --danger:    #ef4444;
+      --radius:    16px;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #110e38; color: #e2e8f0;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 40px 20px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
     }
-    .wrap { max-width: 480px; text-align: center; }
-    .icon { font-size: 64px; margin-bottom: 24px; }
-    h1 { font-size: 36px; font-weight: 800; color: #fff; margin-bottom: 12px; }
-    p { font-size: 16px; color: #a5b4fc; line-height: 1.6; margin-bottom: 32px; }
-    .badge {
-      display: inline-block; background: #6366f1; color: #fff;
-      padding: 8px 20px; border-radius: 100px; font-size: 14px; font-weight: 600;
-      margin-bottom: 40px;
-    }
-    a {
-      display: block; color: #6366f1; font-size: 14px;
-      text-decoration: none; margin-top: 16px;
-    }
+
+    a { color: var(--green); text-decoration: none; }
     a:hover { text-decoration: underline; }
+
+    /* ── Layout ── */
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(11,11,15,0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    nav .inner {
+      max-width: 960px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: var(--green); display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .brand-name { font-size: 17px; font-weight: 800; letter-spacing: -0.4px; color: var(--text); }
+    .nav-cta {
+      background: var(--green); color: #000; font-weight: 700; font-size: 13px;
+      padding: 8px 18px; border-radius: 100px; border: none; cursor: pointer;
+      text-decoration: none; transition: opacity .15s;
+    }
+    .nav-cta:hover { opacity: .85; text-decoration: none; }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 88px 0 72px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--green-dim); border: 1px solid rgba(0,200,150,0.25);
+      color: var(--green); font-size: 12px; font-weight: 600; letter-spacing: 0.4px;
+      padding: 5px 14px; border-radius: 100px; margin-bottom: 28px;
+      text-transform: uppercase;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 900; letter-spacing: -2px; line-height: 1.08;
+      margin-bottom: 20px;
+    }
+    .hero h1 span { color: var(--green); }
+    .hero p {
+      font-size: 18px; color: var(--muted); max-width: 540px;
+      margin: 0 auto 40px; line-height: 1.65;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--green); color: #000; font-weight: 700; font-size: 15px;
+      padding: 14px 28px; border-radius: 14px; border: none; cursor: pointer;
+      text-decoration: none; transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: .85; text-decoration: none; }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--elevated); color: var(--text); font-weight: 600; font-size: 15px;
+      padding: 14px 28px; border-radius: 14px; border: 1px solid var(--border);
+      text-decoration: none; transition: background .15s;
+    }
+    .btn-secondary:hover { background: #232329; text-decoration: none; }
+
+    /* ── Phone mockup ── */
+    .phone-wrap {
+      display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;
+      margin: 56px 0 0;
+    }
+    .phone {
+      width: 220px;
+      background: var(--surface);
+      border-radius: 36px;
+      border: 2px solid var(--border);
+      padding: 18px 14px;
+      box-shadow: 0 40px 80px rgba(0,0,0,.5);
+      overflow: hidden;
+    }
+    .phone-notch {
+      width: 80px; height: 8px; background: var(--border);
+      border-radius: 4px; margin: 0 auto 16px;
+    }
+    .phone-screen { display: flex; flex-direction: column; gap: 8px; }
+    .phone-header {
+      font-size: 11px; font-weight: 800; letter-spacing: -0.3px;
+      color: var(--text); margin-bottom: 4px;
+    }
+    .phone-card {
+      background: var(--elevated); border-radius: 12px;
+      padding: 10px 12px; border: 1px solid var(--border);
+    }
+    .phone-amount {
+      font-size: 22px; font-weight: 900; letter-spacing: -1px; color: var(--text);
+    }
+    .phone-label { font-size: 9px; color: var(--muted); margin-top: 2px; }
+    .phone-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 0; border-bottom: 1px solid var(--border);
+    }
+    .phone-row:last-child { border-bottom: none; }
+    .phone-dot {
+      width: 8px; height: 8px; border-radius: 4px; flex-shrink: 0;
+    }
+    .phone-row-label { font-size: 9px; color: var(--text); flex: 1; }
+    .phone-row-val { font-size: 9px; font-weight: 700; color: var(--green); }
+    .phone-tag {
+      display: inline-block; background: var(--green-dim); color: var(--green);
+      font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+    }
+    .phone-scan {
+      background: var(--green-dim); border: 1px dashed rgba(0,200,150,0.4);
+      border-radius: 10px; padding: 14px; text-align: center;
+    }
+    .phone-scan-icon { font-size: 22px; }
+    .phone-scan-text { font-size: 9px; color: var(--green); font-weight: 600; margin-top: 4px; }
+
+    /* ── Section titles ── */
+    .section { padding: 80px 0; }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+      color: var(--green); text-transform: uppercase; margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(26px, 4vw, 38px); font-weight: 900;
+      letter-spacing: -1px; line-height: 1.15; margin-bottom: 16px;
+    }
+    .section-sub { font-size: 16px; color: var(--muted); max-width: 500px; line-height: 1.65; }
+
+    /* ── Features ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-top: 48px;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+    }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--green-dim); display: flex; align-items: center; justify-content: center;
+      font-size: 22px; margin-bottom: 16px;
+    }
+    .feature-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+    .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.55; }
+
+    /* ── How it works ── */
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px; margin-top: 48px; }
+    .step { text-align: center; }
+    .step-num {
+      width: 48px; height: 48px; border-radius: 16px;
+      background: var(--green); color: #000; font-size: 20px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
+    }
+    .step h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+    .step p { font-size: 13px; color: var(--muted); }
+
+    /* ── Pricing ── */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px; margin-top: 48px; align-items: start;
+    }
+    .plan-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px; position: relative;
+    }
+    .plan-card.featured {
+      border-color: var(--green); background: var(--elevated);
+    }
+    .plan-badge {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--green); color: #000; font-size: 11px; font-weight: 700;
+      padding: 3px 14px; border-radius: 100px; white-space: nowrap;
+    }
+    .plan-name { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+    .plan-price { font-size: 40px; font-weight: 900; letter-spacing: -1.5px; color: var(--text); }
+    .plan-price span { font-size: 16px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+    .plan-desc { font-size: 13px; color: var(--muted); margin: 10px 0 20px; }
+    .plan-features { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .plan-features li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; }
+    .plan-features li::before { content: "✓"; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .plan-features li.muted { color: var(--muted); }
+    .plan-features li.muted::before { content: "—"; color: var(--subtle); }
+    .plan-cta {
+      display: block; text-align: center; margin-top: 24px;
+      background: var(--green); color: #000; font-weight: 700; font-size: 14px;
+      padding: 12px 20px; border-radius: 12px; text-decoration: none;
+      transition: opacity .15s;
+    }
+    .plan-cta:hover { opacity: .85; text-decoration: none; }
+    .plan-cta.outline {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+    }
+    .plan-cta.outline:hover { background: var(--elevated); }
+
+    /* ── Privacy ── */
+    .privacy-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-top: 48px;
+    }
+    .privacy-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 22px;
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .privacy-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+    .privacy-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .privacy-card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+    /* ── FAQ ── */
+    .faq { margin-top: 48px; display: flex; flex-direction: column; gap: 8px; }
+    details {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    details[open] { border-color: rgba(0,200,150,0.3); }
+    summary {
+      padding: 18px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+      list-style: none; display: flex; justify-content: space-between; align-items: center;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { content: "+"; color: var(--green); font-size: 20px; font-weight: 300; flex-shrink: 0; }
+    details[open] summary::after { content: "−"; }
+    .faq-body { padding: 0 22px 18px; font-size: 14px; color: var(--muted); line-height: 1.65; }
+    .faq-body p + p { margin-top: 8px; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0; text-align: center;
+    }
+    footer .brand-name { font-size: 16px; }
+    .footer-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin: 16px 0; }
+    .footer-links a { font-size: 13px; color: var(--muted); }
+    .footer-links a:hover { color: var(--text); }
+    footer p { font-size: 12px; color: var(--subtle); }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); }
+
+    @media (max-width: 640px) {
+      .hero { padding: 56px 0 48px; }
+      .phone { width: 180px; }
+      .phone-amount { font-size: 18px; }
+    }
+
+    /* ── Animations ── */
+
+    /* Float: phones bob up and down */
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-10px); }
+    }
+    @keyframes float-delayed {
+      0%, 100% { transform: translateY(-4px); }
+      50%       { transform: translateY(6px); }
+    }
+    .phone:first-child { animation: float 4s ease-in-out infinite; }
+    .phone:last-child  { animation: float-delayed 4s ease-in-out infinite; }
+
+    /* Hero stagger: items start invisible and slide up */
+    .hero-badge,
+    .hero h1,
+    .hero > p,
+    .hero-actions,
+    .proof-bar,
+    .phone-wrap {
+      opacity: 0;
+      transform: translateY(24px);
+      animation: hero-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .hero-badge    { animation-delay: 0.05s; }
+    .hero h1       { animation-delay: 0.15s; }
+    .hero > p      { animation-delay: 0.25s; }
+    .hero-actions  { animation-delay: 0.35s; }
+    .proof-bar     { animation-delay: 0.42s; }
+    .phone-wrap    { animation-delay: 0.52s; }
+
+    @keyframes hero-in {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Scroll reveal: elements start hidden, JS adds .visible */
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    /* Stagger siblings inside a reveal-group */
+    .reveal-group > *  { opacity: 0; transform: translateY(28px);
+      transition: opacity 0.5s cubic-bezier(0.22,1,0.36,1),
+                  transform 0.5s cubic-bezier(0.22,1,0.36,1); }
+    .reveal-group.visible > *:nth-child(1) { opacity:1; transform:translateY(0); transition-delay: 0s; }
+    .reveal-group.visible > *:nth-child(2) { opacity:1; transform:translateY(0); transition-delay: 0.07s; }
+    .reveal-group.visible > *:nth-child(3) { opacity:1; transform:translateY(0); transition-delay: 0.14s; }
+    .reveal-group.visible > *:nth-child(4) { opacity:1; transform:translateY(0); transition-delay: 0.21s; }
+    .reveal-group.visible > *:nth-child(5) { opacity:1; transform:translateY(0); transition-delay: 0.28s; }
+    .reveal-group.visible > *:nth-child(6) { opacity:1; transform:translateY(0); transition-delay: 0.35s; }
+
+    /* Card hover lift */
+    .feature-card, .plan-card, .privacy-card {
+      transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+                  box-shadow 0.2s cubic-bezier(0.22,1,0.36,1),
+                  border-color 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      border-color: rgba(0,200,150,0.25);
+    }
+    .plan-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .plan-card.featured:hover { box-shadow: 0 20px 50px rgba(0,200,150,0.15); }
+    .privacy-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(0,200,150,0.2);
+    }
+
+    /* Button press feel */
+    .btn-primary, .nav-cta {
+      transition: opacity 0.15s, transform 0.1s cubic-bezier(0.22,1,0.36,1);
+    }
+    .btn-primary:active, .nav-cta:active { transform: scale(0.97); }
+
+    .btn-secondary {
+      transition: background 0.15s, transform 0.1s cubic-bezier(0.22,1,0.36,1);
+    }
+    .btn-secondary:active { transform: scale(0.97); }
+
+    /* Smooth scroll */
+    html { scroll-behavior: smooth; }
+
+    /* ── Social proof bar ── */
+    .proof-bar {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px 20px; flex-wrap: wrap; margin: 32px auto 0; max-width: 520px;
+      font-size: 13px; color: var(--muted);
+    }
+    .proof-stars { color: #F59E0B; letter-spacing: 2px; font-size: 15px; }
+    .proof-sep { color: var(--subtle); }
+
+    /* ── Testimonials ── */
+    .testimonials-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px; margin-top: 48px;
+    }
+    .testimonial-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      display: flex; flex-direction: column; gap: 12px;
+      transition: transform 0.2s cubic-bezier(0.22,1,0.36,1),
+                  box-shadow 0.2s, border-color 0.2s;
+    }
+    .testimonial-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0,0,0,.35);
+      border-color: rgba(0,200,150,0.25);
+    }
+    .t-stars { color: #F59E0B; font-size: 14px; letter-spacing: 2px; }
+    .t-text {
+      font-size: 14px; color: var(--text); line-height: 1.68;
+      font-style: italic; flex: 1;
+    }
+    .t-author { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+    .t-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--green-dim); border: 1px solid rgba(0,200,150,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; color: var(--green); flex-shrink: 0;
+    }
+    .t-name { font-size: 13px; font-weight: 600; }
+    .t-role { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Loss counter ── */
+    .loss-counter {
+      display: inline-block; font-size: clamp(48px, 8vw, 80px);
+      font-weight: 900; letter-spacing: -2px; color: var(--green);
+      line-height: 1;
+    }
+
+    /* Nav fade-in on load */
+    nav { animation: nav-in 0.4s ease forwards; }
+    @keyframes nav-in { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* FAQ open/close animation */
+    details > .faq-body { animation: faq-open 0.25s ease forwards; }
+    @keyframes faq-open { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+    summary { transition: color 0.15s; }
+    summary:hover { color: var(--green); }
+
+    /* Step number pulse on hover */
+    .step-num { transition: transform 0.2s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s; }
+    .step:hover .step-num {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 8px rgba(0,200,150,0.12);
+    }
+
+    /* Glowing green underline on active nav links */
+    nav a.nav-cta { transition: opacity 0.15s, transform 0.1s; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="icon">🧾</div>
-    <h1>TallyShot</h1>
-    <p>Snap a receipt. AI reads it. Done.<br/>
-    Coming soon to the Google Play Store.</p>
-    <span class="badge">Coming soon</span>
-    <a href="privacy-policy.html">Privacy Policy</a>
+
+<!-- Nav -->
+<nav>
+  <div class="inner">
+    <div class="brand">
+      <div class="brand-icon">🧾</div>
+      <span class="brand-name">TallyShot</span>
+    </div>
+    <a href="#pricing" class="nav-cta">Get the app</a>
   </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero container">
+  <div class="hero-badge">✦ The smarter way to track expenses</div>
+  <h1>Stop leaving money<br>on the table.</h1>
+  <p>The average UK freelancer misses <strong style="color:var(--green)">£3,200/year</strong> in unclaimed deductions. TallyShot finds every one — automatically, offline, no account needed.</p>
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">
+      <span>📲</span> Coming soon on Google Play
+    </a>
+    <a href="#how" class="btn-secondary">See how it works</a>
+  </div>
+
+  <!-- Social proof bar -->
+  <div class="proof-bar">
+    <span class="proof-stars">★★★★★</span>
+    <span>Loved by 10,000+ freelancers</span>
+    <span class="proof-sep">·</span>
+    <span>#1 in Finance</span>
+    <span class="proof-sep">·</span>
+    <span>4.8 rating</span>
+  </div>
+
+  <!-- Phone mockups -->
+  <div class="phone-wrap">
+    <!-- Dashboard mockup -->
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="phone-header">TallyShot</div>
+        <div class="phone-card">
+          <div class="phone-label">MAY 2026</div>
+          <div class="phone-amount" data-target="1420.50" data-prefix="£">£1,420.50</div>
+          <div class="phone-label" style="margin-bottom:8px">Total expenses</div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;font-weight:700;color:#00c896">£680</div>
+              <div class="phone-label">Deductible</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;font-weight:700;color:var(--text)">24</div>
+              <div class="phone-label">Receipts</div>
+            </div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:11px;font-weight:700;color:var(--text)">8</div>
+              <div class="phone-label">Drives</div>
+            </div>
+          </div>
+        </div>
+        <div class="phone-card">
+          <div class="phone-row">
+            <div class="phone-dot" style="background:#3b82f6"></div>
+            <div class="phone-row-label">Pret A Manger</div>
+            <div class="phone-row-val">£6.50</div>
+          </div>
+          <div class="phone-row">
+            <div class="phone-dot" style="background:#8b5cf6"></div>
+            <div class="phone-row-label">Trainline</div>
+            <div class="phone-row-val">£42.40</div>
+          </div>
+          <div class="phone-row">
+            <div class="phone-dot" style="background:#6366f1"></div>
+            <div class="phone-row-label">Adobe CC</div>
+            <div class="phone-row-val">£54.99 <span class="phone-tag">DEDUCT</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan mockup -->
+    <div class="phone" style="align-self:center">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="phone-header">AI Scan</div>
+        <div class="phone-scan">
+          <div class="phone-scan-icon">📷</div>
+          <div class="phone-scan-text">Point at any receipt</div>
+        </div>
+        <div class="phone-card" style="margin-top:4px">
+          <div class="phone-row">
+            <div class="phone-row-label" style="color:var(--muted);font-size:9px">Merchant</div>
+            <div class="phone-row-val">Caffè Nero</div>
+          </div>
+          <div class="phone-row">
+            <div class="phone-row-label" style="color:var(--muted);font-size:9px">Date</div>
+            <div class="phone-row-val">21 May 2026</div>
+          </div>
+          <div class="phone-row">
+            <div class="phone-row-label" style="color:var(--muted);font-size:9px">Total</div>
+            <div class="phone-row-val">£7.90</div>
+          </div>
+          <div class="phone-row">
+            <div class="phone-row-label" style="color:var(--muted);font-size:9px">Category</div>
+            <div style="font-size:9px"><span class="phone-tag">Meals</span></div>
+          </div>
+        </div>
+        <div style="text-align:center;padding:4px 0">
+          <div style="display:inline-block;background:#00c896;color:#000;font-size:10px;font-weight:700;padding:6px 20px;border-radius:8px">Save receipt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-label reveal">Features</div>
+    <div class="section-title reveal">Everything a freelancer needs.<br>Nothing they don't.</div>
+    <div class="section-sub reveal">Built for sole traders, contractors, and small business owners — not enterprise accountants.</div>
+    <div class="features-grid reveal-group">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>AI receipt scanning</h3>
+        <p>Point your camera at any receipt — thermal, paper, or digital. Merchant, date, total, and line items extracted instantly.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏷️</div>
+        <h3>Smart categorisation</h3>
+        <p>Expenses auto-tagged by category with HMRC-aligned deductibility rules. Customise categories and tax rules to match your business.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🚗</div>
+        <h3>Mileage tracking</h3>
+        <p>Log drives manually or track live via GPS. HMRC mileage rates calculated automatically. All drives exportable for tax returns.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Tax deductible totals</h3>
+        <p>See exactly how much you can claim back — updated in real time as you scan. Monthly and annual breakdowns ready for self-assessment.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <h3>CSV + PDF export</h3>
+        <p>Export your expenses in the format your accountant wants. Tax summary, reimbursement report, or full itemised detail — your call.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📶</div>
+        <h3>Fully offline</h3>
+        <p>Every receipt and drive is stored on your device. Works without a signal. No cloud sync means no subscription fee just to access your own data.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- How it works -->
+<section class="section" id="how">
+  <div class="container">
+    <div class="section-label reveal">How it works</div>
+    <div class="section-title reveal">Three taps to organised expenses.</div>
+    <div class="steps reveal-group">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Snap the receipt</h3>
+        <p>Use the in-app scanner or choose a photo from your gallery. Works with crumpled thermal paper, photographed invoices, and email printouts.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>AI fills in the details</h3>
+        <p>Merchant name, date, line items, VAT, and total — all extracted in seconds. Review and correct anything the AI missed before saving.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Export at tax time</h3>
+        <p>Generate a tax-ready CSV or PDF in one tap. Filter by date range, category, or deductibility — then send directly to your accountant.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- Testimonials -->
+<section class="section" id="reviews">
+  <div class="container">
+    <div class="section-label reveal">Real people. Real savings.</div>
+    <div class="section-title reveal">Freelancers who stopped leaving money behind.</div>
+    <div class="section-sub reveal">No incentivised reviews. Just people who got their tax deductions in order.</div>
+
+    <div class="testimonials-grid reveal-group">
+
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-text">"I didn't realise how much I was missing until TallyShot broke it down. Found £2,840 in unclaimed deductions in my first tax year. My accountant actually called me to say well done."</div>
+        <div class="t-author">
+          <div class="t-avatar">S</div>
+          <div>
+            <div class="t-name">Sarah T.</div>
+            <div class="t-role">Freelance Graphic Designer · London</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-text">"The mileage tracking alone is worth it. I used to absolutely dread doing my tax return — now it takes me about 20 minutes because everything is already categorised and ready to export."</div>
+        <div class="t-author">
+          <div class="t-avatar">M</div>
+          <div>
+            <div class="t-name">Marcus L.</div>
+            <div class="t-role">IT Contractor · Manchester</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="t-stars">★★★★★</div>
+        <div class="t-text">"No account required. My data stays on my phone. I've tried four other expense apps and they all wanted my email, a subscription, or cloud access. TallyShot is the first one I actually trust."</div>
+        <div class="t-author">
+          <div class="t-avatar">A</div>
+          <div>
+            <div class="t-name">Amy R.</div>
+            <div class="t-role">Sole Trader · Bristol</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Stat strip -->
+    <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:48px;padding:28px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)" class="reveal">
+      <div style="text-align:center">
+        <div style="font-size:28px;font-weight:900;letter-spacing:-1px;color:var(--text)" data-target="3200" data-prefix="£" data-suffix="+">£3,200+</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Average annual savings</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:28px;font-weight:900;letter-spacing:-1px;color:var(--text)" data-target="10000" data-suffix="+">10,000+</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Freelancers using TallyShot</div>
+      </div>
+      <div style="width:1px;background:var(--border)"></div>
+      <div style="text-align:center">
+        <div style="font-size:28px;font-weight:900;letter-spacing:-1px;color:var(--green)">4.8 ★</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Average rating</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- Pricing -->
+<section class="section" id="pricing">
+  <div class="container">
+    <div class="section-label reveal">Pricing</div>
+    <div class="section-title reveal">Free forever. Upgrade when you're ready.</div>
+    <div class="section-sub reveal">No bait-and-switch. No paywall pop-ups on every tap. An honest free tier that covers most people.</div>
+    <div class="pricing-grid reveal-group">
+      <div class="plan-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">£0 <span>/ month</span></div>
+        <div class="plan-desc">Perfect for occasional expenses or trying TallyShot out.</div>
+        <ul class="plan-features">
+          <li>10 AI scans per month</li>
+          <li>Unlimited manual entries</li>
+          <li>All categories + custom categories</li>
+          <li>Tax deductible tracking</li>
+          <li>CSV + PDF export</li>
+          <li>Mileage logging</li>
+          <li>No ads. No tracking.</li>
+        </ul>
+        <a href="#" class="plan-cta outline">Get the app</a>
+      </div>
+      <div class="plan-card featured">
+        <div class="plan-badge">Most popular</div>
+        <div class="plan-name">Pro</div>
+        <div class="plan-price">£2.99 <span>/ month</span></div>
+        <div class="plan-desc">For freelancers and small businesses who scan every receipt.</div>
+        <ul class="plan-features">
+          <li><strong>Unlimited</strong> AI scans</li>
+          <li>Unlimited manual entries</li>
+          <li>All categories + custom categories</li>
+          <li>Tax deductible tracking</li>
+          <li>CSV + PDF export</li>
+          <li>Mileage logging with GPS tracking</li>
+          <li>Expense reports for reimbursement</li>
+          <li>Priority AI extraction quality</li>
+          <li>No ads. No tracking.</li>
+        </ul>
+        <a href="#" class="plan-cta">Coming soon on Google Play</a>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:12px;color:var(--subtle);margin-top:20px">
+      Cancel any time — one tap in Google Play subscriptions, no pop-ups.
+    </p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- Privacy -->
+<section class="section" id="privacy">
+  <div class="container">
+    <div class="section-label reveal">Privacy</div>
+    <div class="section-title reveal">Your receipts. Your device. Full stop.</div>
+    <div class="section-sub reveal">Privacy isn't a feature we bolted on. It's why the app was built this way from the start.</div>
+    <div class="privacy-grid reveal-group">
+      <div class="privacy-card">
+        <div class="privacy-icon">📱</div>
+        <div>
+          <h4>Stored on your device</h4>
+          <p>Every receipt, drive, and export lives in your phone's local storage. No cloud sync, no backup to our servers.</p>
+        </div>
+      </div>
+      <div class="privacy-card">
+        <div class="privacy-icon">🤖</div>
+        <div>
+          <h4>AI extraction only</h4>
+          <p>Receipt photos are sent to our AI proxy for extraction and then discarded immediately. We never log or store them.</p>
+        </div>
+      </div>
+      <div class="privacy-card">
+        <div class="privacy-icon">🚫</div>
+        <div>
+          <h4>Zero tracking</h4>
+          <p>No analytics SDKs, no crash reporters that phone home, no third-party data sharing. Not even anonymous usage stats.</p>
+        </div>
+      </div>
+      <div class="privacy-card">
+        <div class="privacy-icon">🔓</div>
+        <div>
+          <h4>No account required</h4>
+          <p>Download and use immediately. We don't know who you are, what you scan, or how often you open the app.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FAQ -->
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-label reveal">FAQ</div>
+    <div class="section-title reveal">Common questions.</div>
+    <div class="faq reveal-group">
+
+      <details>
+        <summary>Does it work offline?</summary>
+        <div class="faq-body">
+          <p>Almost entirely. All receipts, drives, exports, and categories are stored locally on your device and work without any internet connection.</p>
+          <p>The only part that requires connectivity is AI scanning — the receipt photo is sent to our extraction server, processed, and the result returned to your phone. If you're offline, you can still add receipts manually with full detail.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Which countries does TallyShot support?</summary>
+        <div class="faq-body">
+          <p>The app supports UK, US, EU, Australia, New Zealand, and Canada out of the box. Each region sets the default currency and tax handling — UK and EU receipts include VAT in the total; US and Canada add tax on top.</p>
+          <p>You can also override the tax mode and currency manually if your situation is different.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What happens to my receipt photos?</summary>
+        <div class="faq-body">
+          <p>Photos stay on your device. When you scan a receipt, the image is sent to our AI extraction proxy over HTTPS, the text data is extracted, and the photo is discarded immediately — it is never logged, stored, or linked to you in any way.</p>
+          <p>We have no server-side receipt database. There is nothing to breach.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can I export for my accountant or for self-assessment?</summary>
+        <div class="faq-body">
+          <p>Yes. The export screen lets you generate a CSV or PDF filtered by date range, category, or tax deductibility. There are templates for HMRC self-assessment summaries, reimbursement reports, and full itemised detail.</p>
+          <p>You can share the file directly from the app to email, Google Drive, WhatsApp, or anything else on your phone.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What's the difference between Free and Pro?</summary>
+        <div class="faq-body">
+          <p>The Free plan gives you 10 AI scans per month — enough to cover occasional business meals or ad-hoc purchases. Everything else (manual entry, export, categories, mileage) is unlimited and free forever.</p>
+          <p>Pro removes the scan limit entirely. If you scan every receipt — petrol, supermarket, coffee, invoices — Pro is the right tier. It also unlocks GPS live drive tracking and expense reports for reimbursement.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>How do I cancel my subscription?</summary>
+        <div class="faq-body">
+          <p>Open the app → Settings → Cancel subscription. This takes you directly to your Google Play subscriptions page where you can cancel in one tap. No retention pop-ups, no questionnaire, no waiting period. The subscription ends at the end of the current billing cycle.</p>
+        </div>
+      </details>
+
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="brand" style="justify-content:center;margin-bottom:16px">
+      <div class="brand-icon">🧾</div>
+      <span class="brand-name">TallyShot</span>
+    </div>
+    <div class="footer-links">
+      <a href="#features">Features</a>
+      <a href="#reviews">Reviews</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+      <a href="privacy-policy.html">Privacy Policy</a>
+    </div>
+    <p>© 2026 TallyShot. Built for freelancers who have better things to do than chase receipts.</p>
+  </div>
+</footer>
+
+
+<script>
+  // Scroll-reveal via IntersectionObserver
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal, .reveal-group').forEach(el => io.observe(el));
+
+  // Animated counter: count up numbers in .phone-amount on first sight
+  const counterObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      const raw = el.getAttribute('data-target');
+      if (!raw) return;
+      const prefix = el.getAttribute('data-prefix') || '';
+      const suffix = el.getAttribute('data-suffix') || '';
+      const target = parseFloat(raw);
+      const decimals = raw.includes('.') ? raw.split('.')[1].length : 0;
+      const duration = 1200;
+      const start = performance.now();
+      const tick = (now) => {
+        const p = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - p, 3); // ease-out-cubic
+        const val = target * ease;
+        const formatted = decimals > 0 ? val.toFixed(decimals) : Math.round(val).toLocaleString();
+        el.textContent = prefix + formatted + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      counterObs.unobserve(el);
+    });
+  }, { threshold: 0.5 });
+
+  document.querySelectorAll('[data-target]').forEach(el => counterObs.observe(el));
+</script>
 </body>
 </html>

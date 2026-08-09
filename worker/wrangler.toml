@@ -2,6 +2,7 @@ name = "tallyshot-proxy"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
+account_id = "84349928cb3769c4d514e601047986a8"
 
 [vars]
 # Set ANTHROPIC_API_KEY via: wrangler secret put ANTHROPIC_API_KEY

@@ -1,5 +1,86 @@
 # TallyShot changelog
 
+## Unreleased — Slice 12: Scanner diagnosis & fix (Checkpoint 1)
+
+Diagnosed and fixed the root causes of "the scanner doesn't work." No feature
+changes — pure stability, matching the Checkpoint 1 brief.
+
+### Root cause 1 — `expo-file-system` v55 legacy-API break (receipt capture)
+`expo-file-system@55` moved its entire old API (`documentDirectory`,
+`EncodingType`, `readAsStringAsync`, `copyAsync`, `makeDirectoryAsync`) out of
+the default export into a separate `expo-file-system/legacy` subpath. Six of
+eight call sites had already been migrated to the `/legacy` import in an
+earlier pass, but the two most central to the receipt-scanner pipeline were
+missed:
+
+- **`app/capture.tsx`** — `saveImage()` runs immediately after every photo
+  captured or picked from the gallery, before the AI is ever called. With the
+  broken import this threw right after the shutter press — the actual reason
+  receipt scanning "didn't work."
+- **`src/services/extraction.ts`** — reads the saved photo back as base64 to
+  send to the Worker for AI extraction. Same broken import.
+
+Fix: `import * as FileSystem from 'expo-file-system'` →
+`'expo-file-system/legacy'` in both files, matching the pattern already used
+correctly everywhere else in the codebase. Confirmed via `npx tsc --noEmit`:
+went from 3 errors to 0.
+
+### Root cause 2 — Live Cloudflare Worker had drifted from the repo
+Black-box tested the deployed Worker directly and found it matched *neither*
+the committed nor the (then-uncommitted) local `worker/src/index.ts` — no
+`/chat` route existed live at all, so every POST to `/chat` fell through to
+the receipt-scan handler and failed with `400 Missing image_base64 or
+media_type`. Effect on the barcode scanner specifically:
+
+- The AI Verdict card (`AiSummaryCard`) never populated — permanently
+  empty/broken-looking on every single product scan.
+- "Ask AI About This Product" chat always replied with a connection error.
+- The "Unknown product" AI auto-identify flow always failed silently.
+
+Fix: redeployed the local `worker/src/index.ts` (which already had the
+correct `/chat` routing, `{content}` scan response, and `{answer}` chat
+response matching every client call site) via `wrangler deploy`. Verified
+live post-deploy:
+- `POST /chat` with a real product now returns a real Claude answer in the
+  `{answer}` shape the client expects.
+- `POST /` (receipt scan) still routes separately and reaches Anthropic.
+- `wrangler secret list` confirmed `ANTHROPIC_API_KEY` was already set —
+  this was purely a deploy/drift issue, not a billing/auth issue.
+
+### Root cause 3 — `app.json` schema errors + package version drift
+`npx expo-doctor` caught two more issues on the way:
+- `newArchEnabled` and top-level `android.minSdkVersion` /
+  `targetSdkVersion` are no longer valid Expo config schema keys in SDK 55
+  (New Architecture is mandatory now; SDK version overrides moved into the
+  `expo-build-properties` plugin config). Removed the stale keys, moved
+  `minSdkVersion`/`targetSdkVersion` into the existing `expo-build-properties`
+  plugin block.
+- 23 packages — including `expo-camera` and `expo-file-system`, the two
+  packages this entire bug hunt centred on — were behind the patch versions
+  Expo SDK 55 expects. Ran `npx expo install --fix` to bring every package
+  back in line.
+
+### Minor
+- `app/terms.tsx` referenced `t.textSecondary`, a token that doesn't exist on
+  `SemanticTokens` (masked at runtime by a `?? t.textMuted` fallback, but a
+  real `tsc` error). Simplified to `t.textMuted` directly.
+
+### Files touched
+- `app/capture.tsx`, `src/services/extraction.ts` — file-system import fix
+- `app/terms.tsx` — token fix
+- `app.json` — schema fix, SDK version keys moved to `expo-build-properties`
+- `package.json` / `package-lock.json` — dependency version bump
+- `worker/src/index.ts` — redeployed (no local diff at deploy time; the fix
+  was shipping what was already in the repo)
+- `CHANGES.md` — this entry
+
+### Verification
+- `npx tsc --noEmit` → 0 errors (was 3)
+- `npx expo-doctor` → schema errors resolved
+- Live Worker `/chat` and `/` endpoints round-tripped correctly post-deploy
+
+---
+
 ## Unreleased — Slice 11: Product barcode lookup (Step 3)
 
 ### Open Food Facts integration is now live

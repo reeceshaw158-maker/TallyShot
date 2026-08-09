@@ -158,6 +158,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="onboarding/index" options={{ headerShown: false }} />
+        <Stack.Screen name="trust" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="processing" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
@@ -171,6 +172,10 @@ export default function RootLayout() {
         <Stack.Screen name="reports" options={{ headerShown: false }} />
         <Stack.Screen name="trash" options={{ headerShown: false }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="scan/product" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="scan/result/[barcode]" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false, animation: 'slide_from_right' }} />
+        <Stack.Screen name="terms" options={{ headerShown: false, animation: 'slide_from_right' }} />
       </Stack>
 
       {/* Biometric lock overlay */}

@@ -43,6 +43,10 @@ export interface PendingDeletion {
 
 interface AppState {
   hasCompletedOnboarding: boolean;
+  /** True once the user has dismissed or completed the post-onboarding trust/priming screens. */
+  trustScreensSeen: boolean;
+  /** Incremented every time the paywall screen mounts. Drives progressive copy + urgency. */
+  paywallViewCount: number;
   scansUsedThisMonth: number;
   scansResetMonth: string;
   isPro: boolean;
@@ -65,6 +69,9 @@ interface AppState {
   pendingDeletion: PendingDeletion | null;
 
   completeOnboarding: () => void;
+  resetOnboarding: () => void;
+  setTrustScreensSeen: () => void;
+  incrementPaywallViews: () => void;
   incrementScanCount: () => void;
   resetScanCountIfNewMonth: () => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -143,6 +150,8 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       hasCompletedOnboarding: false,
+      trustScreensSeen: false,
+      paywallViewCount: 0,
       scansUsedThisMonth: 0,
       scansResetMonth: currentYearMonth(),
       isPro: false, // set at startup via RevenueCat (see _layout.tsx)
@@ -158,6 +167,9 @@ export const useAppStore = create<AppState>()(
       pendingDeletion: null,
 
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
+      resetOnboarding: () => set({ hasCompletedOnboarding: false }),
+      setTrustScreensSeen: () => set({ trustScreensSeen: true }),
+      incrementPaywallViews: () => set((s) => ({ paywallViewCount: s.paywallViewCount + 1 })),
 
       incrementScanCount: () => {
         get().resetScanCountIfNewMonth();

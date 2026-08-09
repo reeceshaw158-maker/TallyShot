@@ -5,24 +5,22 @@ let dbOpening: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
-  if (dbOpening) {
-    console.log('[DB] getDb() waiting on in-flight open');
-    return dbOpening;
-  }
+  if (dbOpening) return dbOpening;
   console.log('[DB] getDb() opening tallyshot.db');
   dbOpening = (async () => {
     const opened = await SQLite.openDatabaseAsync('tallyshot.db');
     console.log('[DB] openDatabaseAsync resolved, handle:', !!opened);
-    await initSchema(opened);
-    await dumpSchemaDiagnostics(opened);
+    try {
+      await initSchema(opened);
+      await dumpSchemaDiagnostics(opened);
+    } catch (e) {
+      console.error('[DB] initSchema error (continuing with partial schema):', e);
+    }
     db = opened;
+    dbOpening = null;
     return opened;
   })();
-  try {
-    return await dbOpening;
-  } finally {
-    dbOpening = null;
-  }
+  return dbOpening;
 }
 
 async function dumpSchemaDiagnostics(d: SQLite.SQLiteDatabase) {
@@ -41,133 +39,132 @@ async function dumpSchemaDiagnostics(d: SQLite.SQLiteDatabase) {
 }
 
 async function initSchema(db: SQLite.SQLiteDatabase) {
-  await db.execAsync(`PRAGMA journal_mode = WAL;`);
+  const exec = async (sql: string) => {
+    try { await db.execAsync(sql); } catch (e) { console.warn('[DB] exec failed:', sql.slice(0, 60), e); }
+  };
 
-  // ── Core tables ──────────────────────────────────────────────────────────
+  await exec(`PRAGMA journal_mode = WAL;`);
 
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      name           TEXT NOT NULL,
-      icon           TEXT NOT NULL,
-      color          TEXT NOT NULL,
-      tax_deductible INTEGER NOT NULL DEFAULT 0,
-      is_default     INTEGER NOT NULL DEFAULT 1,
-      sort_order     INTEGER NOT NULL DEFAULT 0,
-      archived_at    TEXT
-    );
+  // ── Core tables — one statement per exec so a single failure is isolated ──
 
-    CREATE TABLE IF NOT EXISTS reports (
-      id             INTEGER PRIMARY KEY AUTOINCREMENT,
-      name           TEXT NOT NULL,
-      description    TEXT NOT NULL DEFAULT '',
-      advance_amount REAL NOT NULL DEFAULT 0,
-      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-      archived_at    TEXT
-    );
+  await exec(`CREATE TABLE IF NOT EXISTS categories (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    icon           TEXT NOT NULL,
+    color          TEXT NOT NULL,
+    tax_deductible INTEGER NOT NULL DEFAULT 0,
+    is_default     INTEGER NOT NULL DEFAULT 1,
+    sort_order     INTEGER NOT NULL DEFAULT 0,
+    archived_at    TEXT
+  );`);
 
-    -- Single-row settings (id always = 1)
-    CREATE TABLE IF NOT EXISTS settings (
-      id                INTEGER PRIMARY KEY DEFAULT 1,
-      biometric_enabled INTEGER NOT NULL DEFAULT 0,
-      mileage_rate      REAL    NOT NULL DEFAULT 0.45,
-      home_currency     TEXT    NOT NULL DEFAULT 'GBP',
-      distance_unit     TEXT    NOT NULL DEFAULT 'mi',
-      auto_track_drives INTEGER NOT NULL DEFAULT 0,
-      updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
+  await exec(`CREATE TABLE IF NOT EXISTS reports (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    description    TEXT NOT NULL DEFAULT '',
+    advance_amount REAL NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    archived_at    TEXT
+  );`);
 
-    CREATE TABLE IF NOT EXISTS receipts (
-      id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-      merchant           TEXT    NOT NULL DEFAULT '',
-      date               TEXT    NOT NULL,
-      currency           TEXT    NOT NULL DEFAULT 'GBP',
-      line_items         TEXT    NOT NULL DEFAULT '[]',
-      subtotal           REAL    NOT NULL DEFAULT 0,
-      tax                REAL    NOT NULL DEFAULT 0,
-      total              REAL    NOT NULL DEFAULT 0,
-      payment_method     TEXT,
-      invoice_number     TEXT,
-      category           TEXT    NOT NULL DEFAULT 'Other',
-      category_id        INTEGER REFERENCES categories(id),
-      notes              TEXT    NOT NULL DEFAULT '',
-      image_uri          TEXT    NOT NULL DEFAULT '',
-      additional_images  TEXT    NOT NULL DEFAULT '[]',
-      status             TEXT    NOT NULL DEFAULT 'complete',
-      is_tax_deductible  INTEGER NOT NULL DEFAULT 0,
-      is_reimbursable    INTEGER NOT NULL DEFAULT 0,
-      refund             INTEGER NOT NULL DEFAULT 0,
-      report_id          INTEGER REFERENCES reports(id),
-      archived_at        TEXT,
-      deleted_at         TEXT,
-      updated_at         TEXT    NOT NULL DEFAULT (datetime('now')),
-      created_at         TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
+  await exec(`CREATE TABLE IF NOT EXISTS settings (
+    id                INTEGER PRIMARY KEY DEFAULT 1,
+    biometric_enabled INTEGER NOT NULL DEFAULT 0,
+    mileage_rate      REAL    NOT NULL DEFAULT 0.45,
+    home_currency     TEXT    NOT NULL DEFAULT 'GBP',
+    distance_unit     TEXT    NOT NULL DEFAULT 'mi',
+    auto_track_drives INTEGER NOT NULL DEFAULT 0,
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+  );`);
 
-    CREATE TABLE IF NOT EXISTS drives (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      started_at   TEXT NOT NULL,
-      ended_at     TEXT,
-      distance_km  REAL NOT NULL DEFAULT 0,
-      start_lat    REAL,
-      start_lng    REAL,
-      end_lat      REAL,
-      end_lng      REAL,
-      purpose      TEXT NOT NULL DEFAULT '',
-      notes        TEXT NOT NULL DEFAULT '',
-      auto_tracked INTEGER NOT NULL DEFAULT 0,
-      is_reimbursable INTEGER NOT NULL DEFAULT 0,
-      deleted_at   TEXT,
-      created_at   TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+  await exec(`CREATE TABLE IF NOT EXISTS receipts (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    merchant           TEXT    NOT NULL DEFAULT '',
+    date               TEXT    NOT NULL,
+    currency           TEXT    NOT NULL DEFAULT 'GBP',
+    line_items         TEXT    NOT NULL DEFAULT '[]',
+    subtotal           REAL    NOT NULL DEFAULT 0,
+    tax                REAL    NOT NULL DEFAULT 0,
+    total              REAL    NOT NULL DEFAULT 0,
+    payment_method     TEXT,
+    invoice_number     TEXT,
+    category           TEXT    NOT NULL DEFAULT 'Other',
+    category_id        INTEGER REFERENCES categories(id),
+    notes              TEXT    NOT NULL DEFAULT '',
+    image_uri          TEXT    NOT NULL DEFAULT '',
+    additional_images  TEXT    NOT NULL DEFAULT '[]',
+    status             TEXT    NOT NULL DEFAULT 'complete',
+    is_tax_deductible  INTEGER NOT NULL DEFAULT 0,
+    is_reimbursable    INTEGER NOT NULL DEFAULT 0,
+    refund             INTEGER NOT NULL DEFAULT 0,
+    report_id          INTEGER REFERENCES reports(id),
+    archived_at        TEXT,
+    deleted_at         TEXT,
+    updated_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now'))
+  );`);
 
-    -- Open Food Facts lookup cache. One row per barcode the user has ever
-    -- scanned, regardless of whether OFF had a hit. We keep negative results
-    -- (status='not_found' / 'not_grocery') too so repeat scans of unknown
-    -- items don't keep hitting the network. Stale-while-revalidate: rows
-    -- are returned immediately; callers may refresh in the background.
-    CREATE TABLE IF NOT EXISTS products (
-      barcode      TEXT PRIMARY KEY,
-      status       TEXT NOT NULL,                 -- 'found' | 'not_found' | 'not_grocery'
-      name         TEXT,
-      brand        TEXT,
-      image_url    TEXT,
-      categories   TEXT,                          -- raw OFF tags (comma-joined)
-      quantity     TEXT,                          -- e.g. "330 ml", "500g"
-      nutriscore   TEXT,                          -- 'a'..'e' or null
-      nova_group   INTEGER,                       -- 1..4 or null (ultra-processed grade)
-      ecoscore     TEXT,                          -- 'a'..'e' or null
-      nutriments   TEXT,                          -- JSON blob: per-100g values
-      fetched_at   TEXT NOT NULL DEFAULT (datetime('now')),
-      source       TEXT NOT NULL DEFAULT 'openfoodfacts'
-    );
-    CREATE INDEX IF NOT EXISTS idx_products_fetched ON products(fetched_at);
+  await exec(`CREATE TABLE IF NOT EXISTS drives (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT,
+    distance_km     REAL NOT NULL DEFAULT 0,
+    start_lat       REAL,
+    start_lng       REAL,
+    end_lat         REAL,
+    end_lng         REAL,
+    purpose         TEXT NOT NULL DEFAULT '',
+    notes           TEXT NOT NULL DEFAULT '',
+    auto_tracked    INTEGER NOT NULL DEFAULT 0,
+    is_reimbursable INTEGER NOT NULL DEFAULT 0,
+    deleted_at      TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );`);
 
-    CREATE TABLE IF NOT EXISTS extraction_feedback (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      receipt_id      INTEGER,
-      field           TEXT NOT NULL,
-      extracted_value TEXT,
-      corrected_value TEXT,
-      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+  await exec(`CREATE TABLE IF NOT EXISTS products (
+    barcode          TEXT PRIMARY KEY,
+    status           TEXT NOT NULL,
+    name             TEXT,
+    brand            TEXT,
+    image_url        TEXT,
+    categories       TEXT,
+    quantity         TEXT,
+    nutriscore       TEXT,
+    nova_group       INTEGER,
+    ecoscore         TEXT,
+    nutriments       TEXT,
+    ingredients_text TEXT,
+    allergens        TEXT,
+    countries        TEXT,
+    fetched_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    source           TEXT NOT NULL DEFAULT 'openfoodfacts'
+  );`);
 
-    CREATE INDEX IF NOT EXISTS idx_receipts_date       ON receipts(date);
-    CREATE INDEX IF NOT EXISTS idx_receipts_category   ON receipts(category);
-    CREATE INDEX IF NOT EXISTS idx_receipts_category_id ON receipts(category_id);
-    CREATE INDEX IF NOT EXISTS idx_receipts_archived   ON receipts(archived_at);
-    CREATE INDEX IF NOT EXISTS idx_receipts_deleted    ON receipts(deleted_at);
-    CREATE INDEX IF NOT EXISTS idx_receipts_report     ON receipts(report_id);
-    CREATE INDEX IF NOT EXISTS idx_receipts_status     ON receipts(status);
-    CREATE INDEX IF NOT EXISTS idx_receipts_deductible ON receipts(is_tax_deductible);
-    CREATE INDEX IF NOT EXISTS idx_drives_started      ON drives(started_at);
-    CREATE INDEX IF NOT EXISTS idx_drives_deleted      ON drives(deleted_at);
-    CREATE INDEX IF NOT EXISTS idx_feedback_receipt    ON extraction_feedback(receipt_id);
-  `);
+  await exec(`CREATE TABLE IF NOT EXISTS extraction_feedback (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    receipt_id      INTEGER,
+    field           TEXT NOT NULL,
+    extracted_value TEXT,
+    corrected_value TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  );`);
+
+  await exec(`CREATE INDEX IF NOT EXISTS idx_products_fetched ON products(fetched_at);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_category ON receipts(category);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_category_id ON receipts(category_id);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_archived ON receipts(archived_at);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_deleted ON receipts(deleted_at);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_report ON receipts(report_id);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_status ON receipts(status);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_receipts_deductible ON receipts(is_tax_deductible);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_drives_started ON drives(started_at);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_drives_deleted ON drives(deleted_at);`);
+  await exec(`CREATE INDEX IF NOT EXISTS idx_feedback_receipt ON extraction_feedback(receipt_id);`);
 
   // ── Additive column migrations (existing installs) ────────────────────────
 
-  const receiptCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(receipts)`);
+  const receiptCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(receipts)`).catch(() => [] as { name: string }[]);
   const rcols = new Set(receiptCols.map((c) => c.name));
 
   const receiptMigrations: [string, string][] = [
@@ -200,7 +197,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     } catch {}
   }
 
-  const driveCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(drives)`);
+  const driveCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(drives)`).catch(() => [] as { name: string }[]);
   const dcols = new Set(driveCols.map((c) => c.name));
 
   const driveMigrations: [string, string][] = [
@@ -227,12 +224,16 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
 
   // products: ingredients/allergens/country added in v2 — additive migration
   // so any existing user cache survives.
-  const productCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(products)`);
+  const productCols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(products)`).catch(() => [] as { name: string }[]);
   const pcols = new Set(productCols.map((c) => c.name));
   const productMigrations: [string, string][] = [
     ['ingredients_text', `ALTER TABLE products ADD COLUMN ingredients_text TEXT`],
     ['allergens',        `ALTER TABLE products ADD COLUMN allergens TEXT`],
     ['countries',        `ALTER TABLE products ADD COLUMN countries TEXT`],
+    ['ai_summary',       `ALTER TABLE products ADD COLUMN ai_summary TEXT`],
+    ['ai_generated_at',  `ALTER TABLE products ADD COLUMN ai_generated_at TEXT`],
+    ['last_seen_at',     `ALTER TABLE products ADD COLUMN last_seen_at TEXT`],
+    ['description',      `ALTER TABLE products ADD COLUMN description TEXT`],
   ];
   for (const [col, sql] of productMigrations) {
     if (!pcols.has(col)) {

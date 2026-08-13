@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { ExtractionSchema, ExtractionResult } from '../schemas/extraction';
 import { TaxMode } from '../types';
+import { DetectionBox, cropToBox } from './detection';
 
 const WORKER_URL = process.env.EXPO_PUBLIC_WORKER_URL ?? 'https://your-worker.your-subdomain.workers.dev';
 
@@ -42,19 +43,23 @@ Rules:
 - date must be ISO 8601 (YYYY-MM-DD). If only month/year visible, use the 1st of the month.
 - suggested_category must exactly match one of the enum values.
 - Extract every line item visible on the receipt. Quantity defaults to 1 if not shown.
-- invoice_number: copy any "Invoice #", "Receipt #", "Order #", "Transaction ID" or similar identifier verbatim. Use null when nothing like that appears (most paper till receipts won't have one).`;
+- invoice_number: copy any "Invoice #", "Receipt #", "Order #", "Transaction ID" or similar identifier verbatim. Use an empty string when nothing like that appears (most paper till receipts won't have one).
+- payment_method: copy what's printed (e.g. "VISA ****4321", "CASH", "Contactless"). Empty string if not shown.
+- If the image is cropped tightly to the receipt, the paper edges may be missing — that's expected, read what's there.`;
 }
 
 /**
  * Resize and compress receipt images for fast upload.
- * Quality 0.6 is plenty for OCR — Claude reads the text fine, and it halves
- * the upload size vs 0.85.
+ *
+ * 1280px at 0.72 quality: the earlier 1024/0.6 pairing was chosen for upload
+ * speed, but small print on thermal paper (the tax line, the card digits) is
+ * exactly what gets lost first. This is still well under 400KB.
  */
 export async function resizeImage(uri: string): Promise<string> {
   const result = await ImageManipulator.manipulateAsync(
     uri,
-    [{ resize: { width: 1024 } }],
-    { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+    [{ resize: { width: 1280 } }],
+    { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG }
   );
   return result.uri;
 }
@@ -78,9 +83,16 @@ export async function prewarmWorker(): Promise<void> {
 export async function extractReceiptData(
   imageUri: string,
   taxMode: TaxMode,
-  taxLabel: string
+  taxLabel: string,
+  /**
+   * Optional AI-detected box for the receipt within the photo. When present the
+   * image is cropped to it first, so the whole upload budget is spent on
+   * receipt pixels instead of the table it's lying on.
+   */
+  cropBox?: DetectionBox | null
 ): Promise<ExtractionResult> {
-  const resizedUri = await resizeImage(imageUri);
+  const sourceUri = cropBox ? await cropToBox(imageUri, cropBox) : imageUri;
+  const resizedUri = await resizeImage(sourceUri);
   const base64 = await FileSystem.readAsStringAsync(resizedUri, {
     encoding: FileSystem.EncodingType.Base64,
   });
@@ -89,6 +101,7 @@ export async function extractReceiptData(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      mode: 'extract',
       image_base64: base64,
       media_type: 'image/jpeg',
       system_prompt: buildSystemPrompt(taxMode, taxLabel),
@@ -96,8 +109,14 @@ export async function extractReceiptData(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Worker error ${response.status}: ${text}`);
+    let message = `Worker error ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.error) message = body.error;
+    } catch {
+      // Non-JSON error body — the status-code message is all we have.
+    }
+    throw new Error(message);
   }
 
   const { content } = await response.json();
@@ -107,11 +126,20 @@ export async function extractReceiptData(
   } catch {
     throw new Error('AI returned an unexpected response. Please try again.');
   }
+  let result: ExtractionResult;
   try {
-    return ExtractionSchema.parse(parsed);
+    result = ExtractionSchema.parse(parsed);
   } catch {
     throw new Error('AI response did not match the expected format. Please try again.');
   }
+
+  // The schema constrains these to plain strings so the model always has a
+  // valid value to emit; "not present" is null everywhere else in the app.
+  return {
+    ...result,
+    payment_method: result.payment_method?.trim() ? result.payment_method.trim() : null,
+    invoice_number: result.invoice_number?.trim() ? result.invoice_number.trim() : null,
+  };
 }
 
 /**

@@ -30,6 +30,8 @@ export default function SettingsScreen() {
   const taxLabel = useAppStore((s) => s.taxLabel);
   const summaryMode = useAppStore((s) => s.summaryMode);
   const photoMode = useAppStore((s) => s.photoMode);
+  const aiAssist = useAppStore((s) => s.aiAssist);
+  const setAiAssist = useAppStore((s) => s.setAiAssist);
   const setTheme = useAppStore((s) => s.setTheme);
   const setCurrency = useAppStore((s) => s.setCurrency);
   const setQuickScan = useAppStore((s) => s.setQuickScan);
@@ -92,6 +94,25 @@ export default function SettingsScreen() {
               Manual entry stays unlimited and free. No ads. No tracking. Ever.
             </Text>
           </View>
+
+          {/* Pricing — visible up front so people don't have to hit the scan
+              limit before they can see what Pro costs. */}
+          <TouchableOpacity
+            style={[styles.upgradeRow, { borderTopColor: t.border }]}
+            onPress={() => router.push('/paywall')}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.optionIcon, { backgroundColor: t.accent + '18' }]}>
+              <MaterialCommunityIcons name="crown" size={18} color={t.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.navTitle, { color: t.textPrimary }]}>Upgrade to Pro</Text>
+              <Text style={[styles.navSub, { color: t.textMuted }]}>
+                From £3.99/mo · £24.99/yr (save 48%) — unlimited scans
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={t.textSubtle} />
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={[styles.planCard, { backgroundColor: t.deductibleBg, borderColor: t.deductible + '55' }]}>
@@ -183,6 +204,15 @@ export default function SettingsScreen() {
           subtitle="Save automatically when AI extraction is confident. Uncertain scans still go to Review."
           value={quickScan}
           onValueChange={setQuickScan}
+        />
+        <View style={[styles.divider, { backgroundColor: t.border }]} />
+        <ToggleRow
+          tokens={t}
+          icon="auto-fix"
+          title="AI assist in camera"
+          subtitle="Finds the receipt live, shows a lock-on box, and crops the photo to the paper before extraction. Uses an extra AI call every few seconds while the camera is open."
+          value={aiAssist}
+          onValueChange={setAiAssist}
         />
         <View style={[styles.divider, { backgroundColor: t.border }]} />
         <View style={styles.subSection}>
@@ -430,6 +460,11 @@ const styles = StyleSheet.create({
   proRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
   proTitle: { fontFamily: 'Inter_700Bold', fontSize: 14, letterSpacing: 0.4 },
   proSub: { fontFamily: 'Inter_500Medium', fontSize: 14, marginTop: 2 },
+  upgradeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14, minHeight: 56,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
 
   sectionLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 0.8, marginBottom: 8, marginLeft: 4 },
   sectionCard: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },

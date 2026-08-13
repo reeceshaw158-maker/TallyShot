@@ -130,6 +130,16 @@ This is what the form will show on your store listing — verify before publishi
 
 ---
 
+## Note: product barcode lookups (shipped Slice 11)
+
+Barcode scanning sends **only the barcode digits** to public product databases
+(Open Food Facts family, UPCitemdb). A barcode number identifies a product, not
+a person or device, and no identifier, account, or personal data accompanies the
+request — so **no Data Safety form answers change**. The privacy policy discloses
+these services anyway (transparency, not obligation).
+
+---
+
 ## Notes for future updates
 
 If you add any of these features, update the form first:

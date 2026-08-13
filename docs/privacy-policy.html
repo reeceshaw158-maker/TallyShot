@@ -58,7 +58,8 @@
 
   <div class="card">
     <p><strong style="color:#fff">Short version:</strong> Your receipt photos and data stay on your device.
-    We send receipt images to an AI service to extract text — nothing else is collected,
+    We send receipt images to an AI service to extract text, and product barcode digits
+    to public product databases to identify products — nothing else is collected,
     sold, or shared.</p>
   </div>
 
@@ -74,6 +75,8 @@
     <li>Receipt photos you take or import</li>
     <li>Extracted receipt data (merchant, date, amount, category)</li>
     <li>Your app settings (currency preference, tax mode, scan count)</li>
+    <li>A cache of product barcodes you have scanned and the product details found
+        for them, so rescans are instant and work offline</li>
   </ul>
 
   <p><strong style="color:#fff">Data sent off your device:</strong></p>
@@ -81,6 +84,9 @@
     <li>Receipt images are sent to our AI extraction service (a Cloudflare Worker
         calling the Claude API by Anthropic) solely to extract text from the image.
         Images are not stored by the service after processing.</li>
+    <li>When you scan a product barcode, the barcode digits — and nothing else —
+        are sent to public product databases to identify the product (see
+        section 5 below).</li>
   </ul>
 
   <p><strong style="color:#fff">Data we never collect:</strong></p>
@@ -106,32 +112,46 @@
   practices apply to that processing —
   see <a href="https://www.anthropic.com/privacy" target="_blank">anthropic.com/privacy</a>.</p>
 
-  <h2>5. Data storage</h2>
+  <h2>5. Product barcode lookups</h2>
+  <p>When you scan a product barcode, TallyShot sends only the barcode digits to free
+  public product databases to identify the product: the Open Food Facts family
+  (Open Food Facts, Open Beauty Facts, Open Products Facts, Open Pet Food Facts —
+  run by the non-profit Open Food Facts association) and UPCitemdb. These requests
+  contain no account, name, photo, or receipt data — a barcode number identifies a
+  product, not a person.</p>
+  <p>If no database recognises the product, you can optionally ask our AI service for
+  a best guess; that request likewise contains only the barcode digits. Successful
+  results are cached on your device, so rescanning the same product needs no network
+  call at all. Product data from the Open Food Facts family is used under the Open
+  Database License — see
+  <a href="https://world.openfoodfacts.org/privacy" target="_blank">openfoodfacts.org/privacy</a>.</p>
+
+  <h2>6. Data storage</h2>
   <p>All receipt data is stored locally on your device using SQLite. We do not operate
   servers that store your receipts. If you uninstall the app, all locally stored
   data is deleted.</p>
 
-  <h2>6. Data sharing</h2>
+  <h2>7. Data sharing</h2>
   <p>We do not sell, trade, or share your data with any third parties for marketing,
   advertising, or analytics purposes.</p>
-  <p>The only external service your data touches is the AI extraction endpoint
-  described in section 4 above.</p>
+  <p>The only external services your data touches are the AI extraction endpoint
+  described in section 4 and the product databases described in section 5 above.</p>
 
-  <h2>7. Children</h2>
+  <h2>8. Children</h2>
   <p>TallyShot is not directed at children under 13. We do not knowingly collect
   any information from children.</p>
 
-  <h2>8. Your rights</h2>
+  <h2>9. Your rights</h2>
   <p>Because your data is stored only on your device, you have full control over it.
   You can delete individual receipts inside the app, or delete all data by
   uninstalling the app.</p>
 
-  <h2>9. Changes to this policy</h2>
+  <h2>10. Changes to this policy</h2>
   <p>If we make material changes to this policy, we will update the "Last updated"
   date at the top of this page. Continued use of the app after changes constitutes
   acceptance of the revised policy.</p>
 
-  <h2>10. Contact</h2>
+  <h2>11. Contact</h2>
   <p>If you have any questions about this privacy policy, please contact us at:<br/>
   <a href="mailto:privacy@tallyshot.app">privacy@tallyshot.app</a></p>
 

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Image, StyleSheet, Animated, Easing, useWindowDimensions } from 'react-native';
 import { Text, ActivityIndicator, Button } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { extractReceiptData, isExtractionConfident } from '../src/services/extraction';
+import { DetectionBox } from '../src/services/detection';
 import { insertReceipt } from '../src/db/receipts';
 import { useAppStore } from '../src/stores/appStore';
 import { Category, ReceiptDraft, CATEGORY_DEDUCTIBLE_DEFAULTS } from '../src/types';
@@ -12,10 +14,26 @@ import { hapticMedium } from '../src/utils/haptics';
 
 type State = 'extracting' | 'error';
 
+/**
+ * Staged copy while the AI works. A single "Reading receipt..." for 5+ seconds
+ * reads as a hang; naming the step the app is actually on makes the same wait
+ * feel accounted for.
+ */
+const STAGES = [
+  'Sharpening the image…',
+  'Reading the receipt…',
+  'Finding the totals…',
+  'Checking the maths…',
+  'Almost there…',
+];
+
 export default function ProcessingScreen() {
-  const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
+  const { imageUri, cropBox } = useLocalSearchParams<{ imageUri: string; cropBox?: string }>();
   const [state, setState] = useState<State>('extracting');
   const [errorMsg, setErrorMsg] = useState('');
+  const [stage, setStage] = useState(0);
+  const scan = useRef(new Animated.Value(0)).current;
+  const { height: winH } = useWindowDimensions();
   const incrementScanCount = useAppStore((s) => s.incrementScanCount);
   const currency = useAppStore((s) => s.currency);
   const quickScan = useAppStore((s) => s.quickScan);
@@ -28,6 +46,34 @@ export default function ProcessingScreen() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Scan-line sweep over the captured photo while extraction runs.
+  useEffect(() => {
+    if (state !== 'extracting') {
+      scan.stopAnimation();
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.timing(scan, {
+        toValue: 1,
+        duration: 1700,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [state, scan]);
+
+  // Advance the status copy while we wait.
+  useEffect(() => {
+    if (state !== 'extracting') return;
+    const id = setInterval(
+      () => setStage((s) => Math.min(s + 1, STAGES.length - 1)),
+      1800
+    );
+    return () => clearInterval(id);
+  }, [state]);
 
   /**
    * Save a confident extraction result directly to DB and return to the list.
@@ -57,6 +103,24 @@ export default function ProcessingScreen() {
 
   const run = async () => {
     setState('extracting');
+    setStage(0);
+    // Only trust a well-formed box — a malformed param must not stop the scan.
+    let box: DetectionBox | null = null;
+    if (cropBox) {
+      try {
+        const parsed = JSON.parse(cropBox);
+        if (
+          typeof parsed?.x === 'number' &&
+          typeof parsed?.y === 'number' &&
+          typeof parsed?.width === 'number' &&
+          typeof parsed?.height === 'number'
+        ) {
+          box = parsed;
+        }
+      } catch {
+        box = null;
+      }
+    }
     // 30-second safety net — if the worker never responds the user is
     // stuck on the spinner forever. This transitions to error so they
     // can retry or save manually.
@@ -67,7 +131,7 @@ export default function ProcessingScreen() {
       setState('error');
     }, 30_000);
     try {
-      const result = await extractReceiptData(imageUri, taxMode, taxLabel);
+      const result = await extractReceiptData(imageUri, taxMode, taxLabel, box);
       clearTimeout(timeoutId);
       if (timedOut) return;
 
@@ -135,9 +199,35 @@ export default function ProcessingScreen() {
 
       {state === 'extracting' && (
         <View style={styles.overlay}>
+          <Animated.View
+            style={[
+              styles.scanBeam,
+              {
+                transform: [
+                  {
+                    translateY: scan.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-160, winH],
+                    }),
+                  },
+                ],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            <LinearGradient
+              colors={[
+                'rgba(129,140,248,0)',
+                'rgba(129,140,248,0.28)',
+                'rgba(199,205,255,0.85)',
+              ]}
+              style={styles.scanBeamGradient}
+            />
+          </Animated.View>
+
           <View style={styles.pill}>
             <ActivityIndicator size="small" color="white" />
-            <Text style={styles.pillText}>Reading receipt...</Text>
+            <Text style={styles.pillText}>{STAGES[stage]}</Text>
           </View>
         </View>
       )}
@@ -190,6 +280,8 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
+  scanBeam: { position: 'absolute', left: 0, right: 0, top: 0, height: 160 },
+  scanBeamGradient: { flex: 1 },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -198,6 +290,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   pillText: { color: 'white', fontSize: 15, fontFamily: 'Inter_500Medium' },
   errorBox: {

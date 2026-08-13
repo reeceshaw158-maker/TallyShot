@@ -54,6 +54,15 @@ interface AppState {
   taxLabel: string;
   summaryMode: SummaryMode;
   photoMode: PhotoMode;
+  /**
+   * AI assist in the camera: poll a cheap vision model every few seconds to
+   * locate the receipt, draw a lock-on box, and auto-crop the capture to it.
+   *
+   * Off by default — it costs an API call per poll, so it's the user's call
+   * whether the accuracy and feedback are worth it. The manual "AI find"
+   * button gives the same result on demand without the timer.
+   */
+  aiAssist: boolean;
   /** Null when no deletion is in flight. Set by receipt detail + multi-select delete. */
   pendingDeletion: PendingDeletion | null;
 
@@ -71,6 +80,7 @@ interface AppState {
   setTaxMode: (mode: TaxMode) => void;
   setSummaryMode: (mode: SummaryMode) => void;
   setPhotoMode: (mode: PhotoMode) => void;
+  setAiAssist: (v: boolean) => void;
   setPendingDeletion: (v: PendingDeletion | null) => void;
   setIsPro: (v: boolean) => void;
 }
@@ -127,6 +137,7 @@ export const useAppStore = create<AppState>()(
       taxLabel: initialPreset.taxLabel,
       summaryMode: 'lineItems',
       photoMode: 'original',
+      aiAssist: false,
       pendingDeletion: null,
 
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
@@ -160,6 +171,7 @@ export const useAppStore = create<AppState>()(
       setTaxMode: (mode) => set({ taxMode: mode }),
       setSummaryMode: (mode) => set({ summaryMode: mode }),
       setPhotoMode: (mode) => set({ photoMode: mode }),
+      setAiAssist: (v) => set({ aiAssist: v }),
       setPendingDeletion: (v) => set({ pendingDeletion: v }),
       setIsPro: (v) => set({ isPro: v }),
     }),

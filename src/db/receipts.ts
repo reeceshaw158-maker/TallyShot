@@ -271,6 +271,11 @@ export async function getMonthlySummary(yearMonth: string): Promise<{
 export async function clearAllUserData(): Promise<void> {
   const db = await getDb();
   await db.execAsync('DELETE FROM receipts;');
+  try {
+    await db.execAsync('DELETE FROM barcode_cache;');
+  } catch {
+    // Cache table may not exist on very old installs.
+  }
   const dir = `${FileSystem.documentDirectory}receipts/`;
   try {
     await FileSystem.deleteAsync(dir, { idempotent: true });

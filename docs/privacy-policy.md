@@ -19,6 +19,7 @@ The app stores the following data **on your device only**:
 - Receipt photos you take or import
 - Receipt details you save (merchant, date, amounts, line items, category, notes, payment method, tax-deductible flag)
 - Your settings (chosen region, tax mode, currency, theme, AI scan counter)
+- A cache of product barcodes you have scanned and the product details found for them (so rescans are instant and work offline)
 
 This data lives in a SQLite database in the app's private storage area and in image files in the app's private documents directory. **We do not have a server-side copy of any of it.**
 
@@ -32,6 +33,13 @@ When you tap **Scan** and the AI extraction runs, TallyShot sends:
 - A **prompt** describing your tax mode (e.g. "GB / VAT inclusive") so the AI parses correctly
 
 …to our **Cloudflare Worker proxy**. The Worker forwards the request to **Anthropic's Claude API** for text extraction, returns the structured result to your phone, and **does not log or store the image, the prompt, or the result**. Anthropic's data handling is governed by the [Anthropic API Usage Policy](https://www.anthropic.com/legal/aup) and [Anthropic Privacy Policy](https://www.anthropic.com/legal/privacy). At time of writing, Anthropic does not use API inputs to train models.
+
+When you scan a **product barcode**, TallyShot sends **only the barcode digits** — nothing else, and nothing about you — to free public product databases to identify the product:
+
+- The **Open Food Facts family** (Open Food Facts, Open Beauty Facts, Open Products Facts, Open Pet Food Facts — run by the non-profit Open Food Facts association; see the [Open Food Facts privacy policy](https://world.openfoodfacts.org/privacy))
+- **UPCitemdb** (a general product database; see the [UPCitemdb terms](https://www.upcitemdb.com/wp/docs/main/terms-of-service/))
+
+These requests contain no account, name, photo, or receipt data — just the barcode number, which identifies a product, not a person. If no database knows the product, you can optionally ask our AI proxy for a best guess; that request likewise contains only the barcode digits. Successful results are cached on your device so rescanning the same product needs no network call at all.
 
 **No analytics, ads, tracking SDKs, crash reporters, or third-party libraries with their own data collection are bundled with the app.** No data is sent to us beyond the AI extraction call.
 
@@ -47,6 +55,8 @@ If you use the app fully offline (e.g. **manual receipt entry**), no data leaves
 | Receipt records | Your device (SQLite: `tallyshot.db`) | Same as above |
 | Settings | Your device (AsyncStorage: `tallyshot-app-store`) | Same as above |
 | AI extraction request | Cloudflare Worker → Anthropic Claude API | Not stored by us. Anthropic's retention policy applies to the inference call (typically transient). |
+| Barcode lookup (digits only) | Open Food Facts family / UPCitemdb | Standard web-server request handling by those services; no account or personal data attached. |
+| Scanned-product cache | Your device (SQLite: `tallyshot.db`) | Until you tap Delete all data or uninstall the app |
 
 Uninstalling TallyShot removes everything we stored.
 
@@ -75,8 +85,8 @@ TallyShot is not directed at children under 13. We do not knowingly collect any 
 
 TallyShot requests the following Android permissions:
 
-- **Camera** — to photograph receipts. Used only when you open the Scan screen. Photos are saved to the app's private storage on your device.
-- **Internet** — required to send receipt photos to the AI extraction proxy. The app works offline for manual entry, list, search, filter, and export.
+- **Camera** — to photograph receipts and scan product barcodes. Used only when you open the Scan screen. Photos are saved to the app's private storage on your device.
+- **Internet** — required to send receipt photos to the AI extraction proxy and barcode digits to public product databases. The app works offline for manual entry, cached barcode rescans, list, search, filter, and export.
 
 The app does **not** request:
 

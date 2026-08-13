@@ -1,5 +1,70 @@
 # TallyShot changelog
 
+## Unreleased — Slice 11: Worldwide barcode lookup chain
+
+The barcode scanner no longer relies on AI guessing alone. Scans now run a
+free database chain automatically, with AI demoted to an explicit last-resort
+button. A scan can never dead-end.
+
+### Lookup chain (new `src/services/productLookup.ts`)
+1. **Local cache** — new `barcode_cache` SQLite table. Rescans are instant
+   and work offline. Cleared by Settings → Delete all data.
+2. **Open Food Facts family** — Open Food Facts, Open Beauty Facts,
+   Open Products Facts, Open Pet Food Facts. Free, no key; called directly
+   from the device so rate limits apply per user, not per app. Custom
+   User-Agent sent as their terms request; ODbL attribution line shown on
+   results ("Product data from Open Food Facts").
+3. **UPCitemdb free tier** — 500M+ general products (electronics, tools,
+   toys). Keyless; per-IP limit (100/day) becomes per-user because calls
+   come from the phone. Exact-GTIN guard rejects any non-matching item.
+4. **AI guess (existing Worker `lookup` mode)** — now user-triggered via
+   "Ask AI for a guess" and clearly chip-labelled "AI guess". Still the only
+   step that costs an AI scan.
+5. **Manual entry** — "Type details myself" opens the Review screen with the
+   barcode pre-filled as the reference number, so the code is saved even
+   when nothing identified it.
+
+### Barcode normalisation
+- UPC-E expanded to UPC-A (standard NS+6+check algorithm, verified against
+  published examples).
+- UPC-A tried as both 12-digit and 13-digit (leading zero) forms — the
+  databases index the EAN-13 form.
+- GTIN-14 (ITF-14 cartons) stripped to EAN-13.
+- Non-retail symbologies (QR, Code 128, …) skip the database chain and go
+  straight to AI/manual, saving pointless network calls.
+
+### Capture screen changes
+- Database lookup fires automatically on scan (free, so no button and no
+  scan-limit gate). Card shows a live "Checking free product databases…"
+  state, then either the match (with source chip: which database, or
+  "saved on this phone" for cache hits) or a "Not in any database yet"
+  card offering AI guess + manual entry.
+- Confidence % now only shown for AI guesses — database matches are exact.
+- Estimated price only ever comes from the AI path; database results leave
+  price at 0 for the user to fill in (foreign price guesses were misleading).
+
+### Onboarding + marketing (dual-scanner story)
+- Onboarding welcome: body copy and feature grid now lead with both scanners
+  ("Snap a receipt — or scan a product barcode"); grid grew to 6 features
+  including "Product barcodes worldwide" and "Rescans work offline".
+- Onboarding free tier: "Unlimited barcode lookups" added (true — the DB
+  chain never touches the AI scan limit).
+- Onboarding permissions copy mentions barcodes.
+- `docs/play-store-listing.md`: "Two scanners in one" differentiator bullet,
+  barcode lines in WHAT YOU CAN DO / PRIVACY / PERMISSIONS / What's new.
+- `docs/privacy-policy.md` + `docs/privacy-policy.html`: new disclosure that
+  barcode scans send only the barcode digits to Open Food Facts family +
+  UPCitemdb; scanned-product cache added to local-data and retention lists.
+- `docs/play-data-safety.md`: note that barcode digits are not personal data,
+  so no Data Safety form answers change.
+
+### Verification
+- `npx tsc --noEmit` → 0 errors
+- Live API shapes verified with real barcodes (OFF hit + miss, UPCitemdb
+  hit + junk-entry guard).
+
+---
+
 ## Unreleased — Slice 10: Smoothness pass
 
 ### S1 — Cold start white flash eliminated

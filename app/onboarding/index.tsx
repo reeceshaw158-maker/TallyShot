@@ -166,15 +166,17 @@ function WelcomeStep({ tokens }: { tokens: SemanticTokens }) {
       <Text style={[styles.brandWord, { color: tokens.textPrimary }]}>TallyShot</Text>
       <Text style={[styles.tagline, { color: tokens.cta }]}>Zero to organised in 30 seconds</Text>
       <Text style={[styles.body, { color: tokens.textMuted }]}>
-        Snap a receipt, our AI extracts the details, and your expenses are tracked. No typing.
-        No accounts. No ads.
+        Snap a receipt — or scan a product barcode — and the details are filled in for you.
+        No typing. No accounts. No ads.
       </Text>
 
       <View style={[styles.featureGrid, { borderColor: tokens.border }]}>
         <Feature tokens={tokens} icon="lightning-bolt" text="AI extraction in seconds" />
+        <Feature tokens={tokens} icon="barcode-scan" text="Product barcodes worldwide" />
         <Feature tokens={tokens} icon="shield-check" text="Stays on your device" />
         <Feature tokens={tokens} icon="cash-multiple" text="Tracks tax-deductibles" />
         <Feature tokens={tokens} icon="file-export" text="CSV + PDF exports" />
+        <Feature tokens={tokens} icon="wifi-off" text="Rescans work offline" />
       </View>
     </View>
   );
@@ -234,12 +236,12 @@ function PermissionsStep({ tokens }: { tokens: SemanticTokens }) {
       </View>
       <Text style={[styles.title, { color: tokens.textPrimary }]}>Camera access</Text>
       <Text style={[styles.body, { color: tokens.textMuted }]}>
-        TallyShot needs your camera to photograph receipts. We never access your existing photos
-        unless you tap "Choose from Gallery".
+        TallyShot needs your camera to photograph receipts and scan product barcodes. We never
+        access your existing photos unless you tap "Choose from Gallery".
       </Text>
 
       <View style={[styles.permList, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
-        <PermLine tokens={tokens} icon="camera" text="Camera — for snapping receipts" />
+        <PermLine tokens={tokens} icon="camera" text="Camera — receipts and barcodes" />
         <PermLine tokens={tokens} icon="image-multiple" text="Photos — only when you pick one" isLast />
       </View>
     </View>
@@ -260,6 +262,7 @@ function FreeTierStep({ tokens }: { tokens: SemanticTokens }) {
       <View style={[styles.tierCard, { backgroundColor: tokens.surface, borderColor: tokens.border }]}>
         <Text style={[styles.tierTitle, { color: tokens.textSubtle }]}>FREE FOREVER</Text>
         <FreeLine tokens={tokens} text={`${FREE_SCAN_LIMIT} AI scans per month`} />
+        <FreeLine tokens={tokens} text="Unlimited barcode lookups" />
         <FreeLine tokens={tokens} text="Unlimited manual entries" />
         <FreeLine tokens={tokens} text="Categories, search, filters" />
         <FreeLine tokens={tokens} text="CSV + PDF export" />

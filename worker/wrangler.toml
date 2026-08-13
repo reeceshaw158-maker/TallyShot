@@ -5,3 +5,16 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # Set ANTHROPIC_API_KEY via: wrangler secret put ANTHROPIC_API_KEY
+#
+# Model overrides — change one of these and redeploy to A/B extraction
+# quality against real receipts without touching code.
+#
+# EXTRACT_MODEL must accept `output_config.effort`: claude-opus-5,
+#   claude-opus-4-8 or claude-sonnet-5. Older tiers (claude-sonnet-4-5,
+#   claude-haiku-4-5) return a 400 on `effort`.
+# DETECT_MODEL runs on a timer while the camera is open, so keep it cheap.
+#   The Worker sends no `effort`/`thinking` on the detect path, so Haiku is
+#   safe here and an Opus-tier model would be wasted money.
+EXTRACT_MODEL = "claude-opus-5"
+DETECT_MODEL = "claude-haiku-4-5"
+LOOKUP_MODEL = "claude-opus-5"

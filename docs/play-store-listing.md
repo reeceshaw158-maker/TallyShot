@@ -2,7 +2,8 @@
 
 Tuned against the four competitors researched in `competitive-research.md`
 (Expensify, Easy Expense, Crunchr, Saldo Apps). Lead with our differentiators:
-**no lost receipts**, **line items**, **honest free tier**, **dark mode**, **regional tax**.
+**no lost receipts**, **dual scanner (receipts + product barcodes)**, **line items**,
+**honest free tier**, **dark mode**, **regional tax**.
 
 ---
 
@@ -40,6 +41,8 @@ WHAT MAKES TALLYSHOT DIFFERENT
 
 • Never lose a receipt. If AI extraction fails, the photo is saved as "Needs Review" with a Retry button. Other apps quietly drop failed scans — we don't.
 
+• Two scanners in one. Point the camera at a receipt for AI extraction, or flip to Barcode mode and scan any product. Barcodes are looked up in free worldwide databases (Open Food Facts and friends — food, cosmetics, and general products), with an AI fallback for anything they miss. Lookups are free and unlimited, and every scanned product is remembered on your phone, so rescans are instant and work offline. If a product isn't in any database, the barcode is still saved and you can type the details in — a scan never dead-ends.
+
 • Line item extraction. Most receipt apps capture the total but skip the items. We extract every line, store them, and export them in CSV and PDF.
 
 • Region-aware tax. Pick your region (UK, EU, US, Australia, NZ, Canada) and we apply the right tax mode automatically. UK VAT is inclusive. US sales tax is exclusive. We never double-count tax — a bug other apps are notorious for.
@@ -54,6 +57,7 @@ WHAT MAKES TALLYSHOT DIFFERENT
 WHAT YOU CAN DO
 
 • Snap a receipt with the camera, or import from your gallery
+• Scan product barcodes (EAN-13, EAN-8, UPC-A, UPC-E) — free worldwide database lookup with AI fallback
 • Auto-extract: merchant, date, currency, items, subtotal, tax, total, payment method, category
 • Edit any field, add or remove line items, add notes
 • Mark expenses as tax-deductible (with smart defaults per category)
@@ -69,6 +73,7 @@ PRIVACY
 • No account required.
 • No analytics SDKs, no trackers, no ads.
 • Receipt photos are sent to our AI proxy for extraction only — never logged, never used for training.
+• Barcode lookups send only the barcode digits to public product databases — nothing about you.
 • Tap "Delete all data" in Settings to wipe everything.
 • Read the full policy in-app.
 
@@ -81,7 +86,7 @@ PRICING
 PERMISSIONS
 
 • Camera — to photograph receipts.
-• Internet — to send receipt photos to our AI proxy.
+• Internet — AI extraction and product barcode database lookups.
 
 That's it. No location, no microphone, no contacts.
 
@@ -91,7 +96,7 @@ GIVE FEEDBACK
 We read every email. If something is broken or missing, tell us at hello@tallyshot.app and we'll respond.
 ```
 
-**Character count:** ~2,400 / 4,000
+**Character count:** ~3,000 / 4,000
 
 ---
 
@@ -101,6 +106,7 @@ We read every email. If something is broken or missing, tell us at hello@tallysh
 First release.
 
 • Snap receipts and let our AI extract merchant, items, total, tax, and category
+• Scan any product barcode — free worldwide database lookup, unlimited, with offline rescans
 • Region-aware tax mode (UK / EU / US / AU / NZ / CA) — never double-counts tax
 • Line item editor and exports
 • CSV + PDF reports (3 templates)

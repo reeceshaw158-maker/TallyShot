@@ -82,6 +82,31 @@ export type ReceiptStatus =
  */
 export type TaxMode = 'inclusive' | 'exclusive';
 
+/**
+ * What the user says they're here for, captured during onboarding.
+ *
+ * Used to pick a sensible default summary mode (sole traders filing VAT want
+ * the three headline numbers; everyone else wants line items), and kept so
+ * later releases can tailor categories and export presets without asking
+ * again.
+ */
+export type UseCase = 'business' | 'freelance' | 'personal' | 'claims';
+
+export interface UseCasePreset {
+  label: string;
+  sub: string;
+  icon: string;
+}
+
+export const USE_CASE_PRESETS: Record<UseCase, UseCasePreset> = {
+  business:  { label: 'Running a business', sub: 'Track company spending and VAT',     icon: 'store-outline' },
+  freelance: { label: 'Self-employed',      sub: 'Sole trader expenses for tax time',  icon: 'account-tie-outline' },
+  claims:    { label: 'Expense claims',     sub: 'Get reimbursed by my employer',      icon: 'file-send-outline' },
+  personal:  { label: 'Personal budgeting', sub: 'Know where my money actually goes',  icon: 'wallet-outline' },
+};
+
+export const USE_CASE_ORDER: UseCase[] = ['business', 'freelance', 'claims', 'personal'];
+
 export type Region = 'GB' | 'EU' | 'US' | 'AU' | 'NZ' | 'CA' | 'other';
 
 export interface RegionPreset {

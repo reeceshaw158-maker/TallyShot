@@ -48,32 +48,32 @@ export interface SemanticTokens {
 }
 
 export const darkTokens: SemanticTokens = {
-  background: '#0d1117',
-  surface: '#1c2128',
-  surfaceElevated: '#262d36',
-  surfaceMuted: '#22282f',
-  border: '#2d343d',
+  background: '#000000',
+  surface: '#111111',
+  surfaceElevated: '#1c1c1e',
+  surfaceMuted: '#0a0a0a',
+  border: 'rgba(255,255,255,0.1)',
 
-  textPrimary: '#f0f4f9',
-  textMuted: '#a3acb8',
-  textSubtle: '#6e7682',
-  textInverse: '#0d1117',
+  textPrimary: '#f5f5f7',
+  textMuted: '#a1a1a6',
+  textSubtle: '#6e6e73',
+  textInverse: '#000000',
 
-  accent: '#818cf8',         // indigo-400
-  cta: '#f5a623',            // amber gold
-  ctaText: '#0d1117',
+  accent: '#818cf8',         // indigo — TallyShot brand
+  cta: '#f59e0b',            // amber — TallyShot brand
+  ctaText: '#000000',
 
-  success: '#34d399',
-  successBg: 'rgba(52,211,153,0.14)',
-  warning: '#fbbf24',
-  warningBg: 'rgba(251,191,36,0.14)',
-  danger: '#f87171',
-  dangerBg: 'rgba(248,113,113,0.14)',
+  success: '#34c759',
+  successBg: 'rgba(52,199,89,0.14)',
+  warning: '#f59e0b',
+  warningBg: 'rgba(245,158,11,0.14)',
+  danger: '#ff3b30',
+  dangerBg: 'rgba(255,59,48,0.14)',
 
-  needsReview: '#fbbf24',
-  needsReviewBg: 'rgba(251,191,36,0.16)',
-  deductible: '#34d399',
-  deductibleBg: 'rgba(52,211,153,0.16)',
+  needsReview: '#f59e0b',
+  needsReviewBg: 'rgba(245,158,11,0.14)',
+  deductible: '#34c759',
+  deductibleBg: 'rgba(52,199,89,0.14)',
 };
 
 export const lightTokens: SemanticTokens = {

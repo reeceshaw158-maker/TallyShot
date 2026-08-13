@@ -11,30 +11,30 @@ export default function TabLayout() {
   // both the tab bar height and its paddingBottom so the tab icons sit above
   // the system gesture zone on every device.
   const insets = useSafeAreaInsets();
-  const TAB_BAR_CONTENT_HEIGHT = 64; // px above the system nav area
+  const TAB_BAR_CONTENT_HEIGHT = 68; // px above the system nav area
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: t.accent,
-        tabBarInactiveTintColor: t.textMuted,
+        tabBarInactiveTintColor: t.textSubtle,
         tabBarStyle: {
-          backgroundColor: t.surface,
-          borderTopWidth: 1,
-          borderTopColor: t.border,
+          backgroundColor: '#0a0a0a',
+          borderTopWidth: 0.5,
+          borderTopColor: 'rgba(255,255,255,0.08)',
           height: tabBarHeight,
-          paddingBottom: 8 + insets.bottom,
-          paddingTop: 6,
+          paddingBottom: 10 + insets.bottom,
+          paddingTop: 8,
         },
         tabBarLabelStyle: {
           fontFamily: 'Inter_500Medium',
           fontSize: 11,
           letterSpacing: 0.2,
         },
-        headerStyle: { backgroundColor: t.background },
-        headerTitleStyle: { color: t.textPrimary, fontFamily: 'Inter_700Bold' },
-        sceneStyle: { backgroundColor: t.background },
+        headerStyle: { backgroundColor: '#000000' },
+        headerTitleStyle: { color: '#f5f5f7', fontFamily: 'Inter_700Bold' },
+        sceneStyle: { backgroundColor: '#000000' },
       }}
     >
       <Tabs.Screen

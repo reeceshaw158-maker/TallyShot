@@ -45,3 +45,6 @@ worker/.wrangler/
 # generated native folders
 /ios
 /android
+
+# Local Netlify folder
+.netlify

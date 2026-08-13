@@ -1,41 +1,846 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TallyShot</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TallyShot — Snap a receipt. AI reads it. Done.</title>
+  <meta name="description" content="TallyShot turns any receipt photo into a categorised, searchable expense in seconds. AI-powered. Tax-ready. Free to start.">
+  <meta property="og:title" content="TallyShot — Snap a receipt. AI reads it. Done.">
+  <meta property="og:description" content="AI receipt scanning for freelancers, business owners, and anyone who hates expense reports.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#000000">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #110e38; color: #e2e8f0;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 40px 20px;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --black:#000000;
+      --surface:#111111;
+      --elevated:#1c1c1e;
+      --border:rgba(255,255,255,0.08);
+      --border2:rgba(255,255,255,0.14);
+      --text:#f5f5f7;
+      --muted:#a1a1a6;
+      --subtle:#6e6e73;
+      --indigo:#818cf8;
+      --indigo-dark:#6366f1;
+      --amber:#f59e0b;
+      --amber-light:#fbbf24;
+      --green:#34c759;
+      --glass:rgba(255,255,255,0.05);
+      --nav-h:48px;
     }
-    .wrap { max-width: 480px; text-align: center; }
-    .icon { font-size: 64px; margin-bottom: 24px; }
-    h1 { font-size: 36px; font-weight: 800; color: #fff; margin-bottom: 12px; }
-    p { font-size: 16px; color: #a5b4fc; line-height: 1.6; margin-bottom: 32px; }
-    .badge {
-      display: inline-block; background: #6366f1; color: #fff;
-      padding: 8px 20px; border-radius: 100px; font-size: 14px; font-weight: 600;
-      margin-bottom: 40px;
+    html{scroll-behavior:smooth;}
+    body{font-family:'Inter',sans-serif;background:#000;color:var(--text);overflow-x:hidden;-webkit-font-smoothing:antialiased;}
+
+    /* ── SUBTLE GRID BG ── */
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:radial-gradient(circle at 20% 20%, rgba(129,140,248,0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(245,158,11,0.05) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(52,199,89,0.03) 0%, transparent 60%);}
+    #cursor-glow{position:fixed;pointer-events:none;z-index:1;width:500px;height:500px;border-radius:50%;
+      background:radial-gradient(circle,rgba(129,140,248,0.05) 0%,transparent 70%);
+      transform:translate(-50%,-50%);left:-500px;top:-500px;transition:left .18s ease,top .18s ease;}
+    .container{max-width:1080px;margin:0 auto;padding:0 22px;position:relative;z-index:10;}
+    section{position:relative;z-index:10;}
+
+    /* ── NAV ── */
+    nav{position:fixed;top:0;left:0;right:0;z-index:500;height:var(--nav-h);display:flex;align-items:center;padding:0 22px;background:rgba(0,0,0,0);transition:background .4s ease;}
+    nav.scrolled{background:rgba(0,0,0,0.72);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:0.5px solid rgba(255,255,255,0.1);}
+    .nav-logo{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:600;color:var(--text);text-decoration:none;letter-spacing:-.02em;flex-shrink:0;}
+    .logo-mark{width:28px;height:28px;background:var(--amber);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;}
+    .nav-center{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:2px;}
+    .nav-center a{font-size:13px;font-weight:400;color:rgba(245,245,247,0.76);text-decoration:none;padding:6px 10px;border-radius:6px;letter-spacing:-.01em;transition:color .2s,background .2s;white-space:nowrap;}
+    .nav-center a:hover{color:var(--text);background:rgba(255,255,255,0.06);}
+    .nav-end{margin-left:auto;display:flex;align-items:center;gap:10px;}
+    .nav-cta{background:var(--amber);color:#000;padding:6px 16px;border-radius:100px;font-size:13px;font-weight:600;text-decoration:none;letter-spacing:-.01em;transition:opacity .2s,transform .2s;white-space:nowrap;}
+    .nav-cta:hover{opacity:.88;transform:scale(0.98);}
+    .nav-burger{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:6px;border-radius:6px;}
+
+    /* ── MOB MENU ── */
+    .mob-menu{position:fixed;inset:0;z-index:499;background:rgba(0,0,0,0.96);backdrop-filter:blur(28px);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;opacity:0;pointer-events:none;transition:opacity .28s ease;}
+    .mob-menu.open{opacity:1;pointer-events:all;}
+    .mob-menu a{font-size:1.5rem;font-weight:600;color:rgba(245,245,247,0.7);text-decoration:none;padding:12px 40px;border-radius:14px;transition:color .2s,background .2s;letter-spacing:-.03em;}
+    .mob-menu a:hover{color:var(--text);background:rgba(255,255,255,0.06);}
+    .mob-cta-link{background:var(--amber) !important;color:#000 !important;margin-top:14px;border-radius:100px !important;}
+    .mob-close{position:absolute;top:20px;right:22px;background:none;border:none;color:var(--subtle);font-size:1.2rem;cursor:pointer;padding:8px;border-radius:8px;}
+
+    /* ── HERO ── */
+    .hero{height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 22px;padding-top:var(--nav-h);}
+    .hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.22);color:var(--amber);padding:6px 16px;border-radius:100px;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:28px;animation:fadeUp .7s .1s cubic-bezier(0.16,1,0.3,1) both;}
+    .hero h1{font-size:clamp(40px,7.5vw,96px);font-weight:700;letter-spacing:-.035em;line-height:1.05;color:var(--text);max-width:820px;margin-bottom:20px;animation:fadeUp .8s .2s cubic-bezier(0.16,1,0.3,1) both;}
+    .hero h1 .grad{background:linear-gradient(135deg,var(--text) 20%,var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .hero-sub{font-size:clamp(17px,2vw,21px);font-weight:400;color:var(--subtle);line-height:1.52;max-width:500px;margin:0 auto 36px;animation:fadeUp .8s .35s cubic-bezier(0.16,1,0.3,1) both;}
+    .hero-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:44px;animation:fadeUp .8s .45s cubic-bezier(0.16,1,0.3,1) both;}
+    .btn-primary{background:var(--amber);color:#000;padding:14px 28px;border-radius:100px;font-size:.95rem;font-weight:600;text-decoration:none;border:none;cursor:pointer;letter-spacing:-.01em;transition:opacity .2s,transform .2s;box-shadow:0 0 40px rgba(245,158,11,0.28);}
+    .btn-primary:hover{opacity:.88;transform:translateY(-1px);}
+    .btn-secondary{background:rgba(255,255,255,0.08);color:var(--text);padding:14px 28px;border-radius:100px;font-size:.95rem;font-weight:500;text-decoration:none;border:1px solid rgba(255,255,255,0.12);cursor:pointer;letter-spacing:-.01em;transition:background .2s,transform .2s;}
+    .btn-secondary:hover{background:rgba(255,255,255,0.12);transform:translateY(-1px);}
+    .hero-trust{display:flex;align-items:center;justify-content:center;gap:20px;flex-wrap:wrap;animation:fadeUp .8s .55s cubic-bezier(0.16,1,0.3,1) both;}
+    .trust-item{font-size:.78rem;color:var(--subtle);display:flex;align-items:center;gap:5px;}
+    .trust-check{color:var(--amber);}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(28px);}to{opacity:1;transform:translateY(0);}}
+
+    /* ── SCROLL REVEAL ── */
+    [data-reveal]{opacity:0;transform:translateY(28px);transition:opacity .8s cubic-bezier(0.16,1,0.3,1),transform .8s cubic-bezier(0.16,1,0.3,1);}
+    [data-reveal].revealed{opacity:1;transform:translateY(0);}
+    [data-reveal-left]{opacity:0;transform:translateX(-28px);transition:opacity .8s cubic-bezier(0.16,1,0.3,1),transform .8s cubic-bezier(0.16,1,0.3,1);}
+    [data-reveal-left].revealed{opacity:1;transform:translateX(0);}
+    [data-reveal-right]{opacity:0;transform:translateX(28px);transition:opacity .8s cubic-bezier(0.16,1,0.3,1),transform .8s cubic-bezier(0.16,1,0.3,1);}
+    [data-reveal-right].revealed{opacity:1;transform:translateX(0);}
+
+    /* ── STATS ── */
+    .stats-bar{background:rgba(0,0,0,0.6);border-top:0.5px solid var(--border);border-bottom:0.5px solid var(--border);backdrop-filter:blur(20px);}
+    .stats-inner{display:flex;justify-content:center;}
+    .stat-item{flex:1;max-width:220px;text-align:center;padding:28px 16px;}
+    .stat-item+.stat-item{border-left:0.5px solid var(--border);}
+    .stat-n{font-size:2.2rem;font-weight:700;letter-spacing:-.045em;line-height:1;margin-bottom:5px;color:var(--text);}
+    .stat-l{font-size:.72rem;color:var(--subtle);font-weight:400;text-transform:uppercase;letter-spacing:.1em;}
+
+    /* ── MARQUEE ── */
+    .mq-wrap{overflow:hidden;border-bottom:0.5px solid var(--border);padding:12px 0;background:rgba(0,0,0,0.4);}
+    .mq-track{display:flex;width:max-content;animation:mq 30s linear infinite;}
+    .mq-track:hover{animation-play-state:paused;}
+    .mq-item{display:flex;align-items:center;gap:8px;padding:0 22px;white-space:nowrap;font-size:.78rem;font-weight:400;color:var(--subtle);}
+    .mq-dot{width:3px;height:3px;border-radius:50%;background:rgba(255,255,255,0.12);}
+    .mq-item b{color:var(--muted);font-weight:500;}
+    @keyframes mq{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+
+    /* ── SECTION TYPOGRAPHY ── */
+    .sec-eyebrow{font-size:.72rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);margin-bottom:14px;}
+    .sec-title{font-size:clamp(32px,4.5vw,64px);font-weight:700;letter-spacing:-.034em;line-height:1.06;margin-bottom:16px;}
+    .sec-sub{font-size:clamp(16px,1.6vw,19px);color:var(--subtle);line-height:1.58;font-weight:400;}
+    .grad{background:linear-gradient(135deg,var(--text) 20%,var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .grad-indigo{background:linear-gradient(135deg,var(--text) 20%,var(--indigo));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+    .divider{width:100%;height:0.5px;background:linear-gradient(90deg,transparent,var(--border),transparent);}
+
+    /* ── HOW IT WORKS ── */
+    .how-section{padding:100px 0;}
+    .how-header{text-align:center;margin-bottom:60px;}
+    .how-header .sec-sub{max-width:460px;margin:0 auto;}
+    .how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+    .how-card{background:var(--glass);border:1px solid var(--border);border-radius:20px;padding:28px 24px;backdrop-filter:blur(20px);transition:transform .4s cubic-bezier(0.16,1,0.3,1),border-color .3s;}
+    .how-card:hover{transform:scale(1.02);border-color:var(--border2);}
+    .how-step{width:34px;height:34px;border-radius:9px;background:var(--amber);display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#000;margin-bottom:18px;}
+    .how-title{font-size:.98rem;font-weight:600;letter-spacing:-.02em;margin-bottom:7px;}
+    .how-desc{font-size:.84rem;color:var(--subtle);line-height:1.7;}
+    .how-tag{display:inline-flex;margin-top:14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.18);color:var(--amber);font-size:.66rem;font-weight:500;padding:3px 10px;border-radius:100px;letter-spacing:.04em;}
+
+    /* ── FEATURE SECTIONS ── */
+    .feat-section{min-height:100svh;display:flex;align-items:center;padding:100px 0;}
+    .feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}
+    .feat-grid.reverse{direction:rtl;}
+    .feat-grid.reverse>*{direction:ltr;}
+    .feat-copy{max-width:480px;}
+    .feat-headline{font-size:clamp(32px,4.2vw,60px);font-weight:700;letter-spacing:-.034em;line-height:1.06;margin-bottom:18px;}
+    .feat-body{font-size:clamp(16px,1.5vw,18px);color:var(--subtle);line-height:1.65;margin-bottom:28px;}
+    .feat-points{display:flex;flex-direction:column;gap:18px;}
+    .feat-point{display:flex;gap:14px;align-items:flex-start;}
+    .feat-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0;}
+    .feat-pt-title{font-size:.9rem;font-weight:600;margin-bottom:3px;}
+    .feat-pt-desc{font-size:.82rem;color:var(--subtle);line-height:1.65;}
+
+    /* ── PHONE MOCKUP ── */
+    .phone-scene{display:flex;justify-content:center;position:relative;}
+    .phone-scene::before{content:'';position:absolute;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(129,140,248,0.14) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+    .phone-float{animation:phoneFloat 7s ease-in-out infinite;}
+    @keyframes phoneFloat{0%,100%{transform:translateY(0) rotate(.3deg);}50%{transform:translateY(-14px) rotate(-.3deg);}}
+    .phone{width:270px;background:rgba(17,17,17,0.96);border-radius:46px;border:1.5px solid rgba(255,255,255,0.12);overflow:hidden;position:relative;box-shadow:0 0 0 1px rgba(245,158,11,0.05),0 50px 120px rgba(0,0,0,0.9),0 0 100px rgba(129,140,248,0.1),inset 0 1px 0 rgba(255,255,255,0.06);}
+    .phone-notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:86px;height:22px;background:#000;border-radius:0 0 12px 12px;z-index:10;}
+    .pscr{padding:34px 14px 18px;}
+
+    /* phone header */
+    .ph-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;}
+    .ph-brand{display:flex;align-items:center;gap:7px;}
+    .ph-brand-mark{width:24px;height:24px;background:var(--amber);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.7rem;}
+    .ph-brand-name{font-size:.9rem;font-weight:700;letter-spacing:-.02em;color:#f5f5f7;}
+    .ph-month-total{text-align:right;}
+    .ph-month-lbl{font-size:.42rem;color:var(--subtle);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;}
+    .ph-month-amt{font-size:1.1rem;font-weight:800;letter-spacing:-.04em;color:#f5f5f7;}
+
+    /* search */
+    .ph-search{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:100px;padding:7px 10px;margin-bottom:10px;}
+    .ph-search-txt{font-size:.5rem;color:var(--subtle);flex:1;}
+
+    /* chips */
+    .ph-chips{display:flex;gap:5px;margin-bottom:12px;overflow:hidden;}
+    .ph-chip{display:flex;align-items:center;gap:3px;padding:3px 8px;border-radius:100px;border:1px solid;font-size:.44rem;font-weight:500;white-space:nowrap;}
+
+    /* receipt items */
+    .ph-receipt{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:10px 11px;margin-bottom:6px;}
+    .ph-receipt.flagged{border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.06);}
+    .ph-r-icon{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0;}
+    .ph-r-mid{flex:1;}
+    .ph-r-merchant{font-size:.58rem;font-weight:600;color:#f5f5f7;margin-bottom:2px;}
+    .ph-r-meta{font-size:.48rem;color:var(--subtle);}
+    .ph-r-amount{font-size:.7rem;font-weight:800;letter-spacing:-.02em;color:#f5f5f7;}
+
+    /* scan button */
+    .ph-scan-btn{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--amber);border-radius:100px;padding:10px;margin-top:10px;width:100%;}
+    .ph-scan-txt{font-size:.6rem;font-weight:700;color:#000;}
+
+    /* stats phone */
+    .ph-stats{padding-top:10px;}
+    .ph-stat-bar-row{margin-bottom:10px;}
+    .ph-stat-bar-label{display:flex;justify-content:space-between;font-size:.48rem;color:var(--muted);margin-bottom:4px;}
+    .ph-stat-bar-track{height:6px;background:rgba(255,255,255,0.06);border-radius:100px;overflow:hidden;}
+    .ph-stat-bar-fill{height:6px;border-radius:100px;}
+
+    /* ── CATEGORIES GRID ── */
+    .cat-section{padding:100px 0;}
+    .cat-header{text-align:center;margin-bottom:52px;}
+    .cat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+    .cat-card{background:var(--glass);border:1px solid var(--border);border-radius:16px;padding:16px 12px;text-align:center;backdrop-filter:blur(20px);transition:transform .4s cubic-bezier(0.16,1,0.3,1),border-color .3s;}
+    .cat-card:hover{transform:scale(1.03) translateY(-3px);border-color:var(--border2);}
+    .cat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--cc,var(--amber));border-radius:16px 16px 0 0;}
+    .cat-card{position:relative;overflow:hidden;}
+    .cat-emoji{font-size:1.4rem;display:block;margin-bottom:7px;}
+    .cat-name{font-size:.72rem;font-weight:600;margin-bottom:3px;letter-spacing:-.01em;}
+    .cat-tag{font-size:.62rem;color:var(--subtle);}
+
+    /* ── BENTO ── */
+    .features-section{padding:100px 0;}
+    .features-hdr{text-align:center;margin-bottom:52px;}
+    .features-hdr .sec-sub{max-width:440px;margin:12px auto 0;}
+    .bento{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+    .b-card{background:var(--glass);border:1px solid var(--border);border-radius:20px;padding:26px;backdrop-filter:blur(20px);transition:transform .4s cubic-bezier(0.16,1,0.3,1),border-color .3s;}
+    .b-card:hover{transform:scale(1.02);border-color:var(--border2);}
+    .b-wide{grid-column:span 2;}
+    .b-amber{background:linear-gradient(145deg,rgba(245,158,11,0.08),var(--glass));border-color:rgba(245,158,11,0.18);}
+    .b-indigo{background:linear-gradient(145deg,rgba(129,140,248,0.08),var(--glass));border-color:rgba(129,140,248,0.15);}
+    .b-green{background:linear-gradient(145deg,rgba(52,199,89,0.08),var(--glass));border-color:rgba(52,199,89,0.15);}
+    .b-icon{font-size:1.4rem;display:block;margin-bottom:14px;}
+    .b-title{font-size:.9rem;font-weight:700;letter-spacing:-.02em;margin-bottom:6px;}
+    .b-desc{font-size:.8rem;color:var(--subtle);line-height:1.68;}
+
+    /* ── REVIEWS ── */
+    .reviews-section{padding:100px 0;}
+    .reviews-hdr{text-align:center;margin-bottom:52px;}
+    .reviews-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+    .r-card{background:var(--glass);border:1px solid var(--border);border-radius:20px;padding:26px;backdrop-filter:blur(20px);}
+    .r-stars{color:var(--amber);font-size:.75rem;letter-spacing:2px;margin-bottom:12px;}
+    .r-text{font-size:.84rem;color:var(--muted);line-height:1.76;font-style:italic;margin-bottom:18px;}
+    .r-author{display:flex;align-items:center;gap:9px;}
+    .r-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;}
+    .r-name{font-size:.82rem;font-weight:600;margin-bottom:1px;}
+    .r-loc{font-size:.69rem;color:var(--subtle);}
+
+    /* ── FAQ ── */
+    .faq-section{padding:100px 0;}
+    .faq-hdr{text-align:center;margin-bottom:52px;}
+    .faq-hdr .sec-sub{max-width:480px;margin:12px auto 0;}
+    .faq-list{max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:6px;}
+    .faq-item{background:var(--glass);border:1px solid var(--border);border-radius:16px;overflow:hidden;backdrop-filter:blur(20px);transition:border-color .25s;}
+    .faq-item:hover{border-color:var(--border2);}
+    .faq-q{width:100%;display:flex;justify-content:space-between;align-items:center;padding:20px 22px;background:none;border:none;color:var(--text);font-size:.9rem;font-weight:500;cursor:pointer;text-align:left;gap:16px;letter-spacing:-.015em;}
+    .faq-chev{display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.06);color:var(--subtle);font-size:.62rem;flex-shrink:0;transition:transform .32s cubic-bezier(0.16,1,0.3,1),background .2s;}
+    .faq-item.open .faq-chev{transform:rotate(180deg);background:rgba(245,158,11,0.18);color:var(--amber);}
+    .faq-a{font-size:.84rem;color:var(--muted);line-height:1.78;padding:0 22px;max-height:0;overflow:hidden;transition:max-height .38s ease,padding .3s ease;}
+    .faq-item.open .faq-a{max-height:320px;padding:0 22px 20px;}
+
+    /* ── PRICING ── */
+    .pricing-section{padding:100px 0;}
+    .pricing-hdr{text-align:center;margin-bottom:52px;}
+    .pricing-hdr .sec-sub{max-width:440px;margin:12px auto 0;}
+    .p-toggle{display:inline-flex;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:100px;padding:3px;margin-top:22px;gap:2px;}
+    .ptb{padding:7px 18px;border-radius:100px;border:none;font-size:.78rem;font-weight:500;cursor:pointer;transition:background .2s,color .2s;background:transparent;color:var(--muted);}
+    .ptb.on{background:var(--amber);color:#000;}
+    .pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:680px;margin:0 auto;}
+    .p-card{background:var(--glass);border:1px solid var(--border);border-radius:22px;padding:32px;position:relative;backdrop-filter:blur(20px);}
+    .p-card.pro{border-color:rgba(245,158,11,0.36);background:linear-gradient(155deg,rgba(245,158,11,0.08),var(--glass) 60%);box-shadow:0 0 60px rgba(245,158,11,0.1);}
+    .p-tag{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--amber);color:#000;font-size:.62rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 14px;border-radius:100px;white-space:nowrap;}
+    .p-name{font-size:.7rem;font-weight:600;color:var(--subtle);text-transform:uppercase;letter-spacing:.1em;margin-bottom:9px;}
+    .p-price{font-size:2.6rem;font-weight:700;letter-spacing:-.05em;line-height:1;margin-bottom:4px;}
+    .p-price sub{font-size:.9rem;font-weight:400;color:var(--muted);letter-spacing:0;}
+    .p-period{font-size:.73rem;color:var(--subtle);margin-bottom:22px;}
+    .p-perks{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:26px;}
+    .p-perks li{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted);}
+    .py,.pn{width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.54rem;flex-shrink:0;}
+    .py{background:rgba(245,158,11,0.15);color:var(--amber);}
+    .pn{background:rgba(255,255,255,0.06);color:var(--subtle);}
+    .p-btn{display:block;text-align:center;padding:12px;border-radius:100px;font-size:.86rem;font-weight:600;text-decoration:none;border:none;cursor:pointer;transition:opacity .2s,transform .2s;}
+    .p-free{background:rgba(255,255,255,0.07);border:1px solid var(--border);color:var(--text);}
+    .p-pro{background:var(--amber);color:#000;box-shadow:0 0 28px rgba(245,158,11,0.25);}
+    .p-btn:hover{opacity:.88;transform:translateY(-1px);}
+    .trial-note{text-align:center;font-size:.74rem;color:var(--subtle);margin-top:16px;}
+    .trial-note strong{color:var(--amber);}
+
+    /* ── CTA ── */
+    .cta-section{padding:100px 0;}
+    .cta-inner{background:linear-gradient(135deg,rgba(245,158,11,0.12),rgba(129,140,248,0.06));border:1px solid rgba(245,158,11,0.2);border-radius:28px;padding:80px 44px;text-align:center;position:relative;overflow:hidden;backdrop-filter:blur(20px);}
+    .cta-inner::before{content:'';position:absolute;top:-40%;left:50%;transform:translateX(-50%);width:500px;height:300px;background:radial-gradient(ellipse,rgba(245,158,11,0.1) 0%,transparent 70%);pointer-events:none;}
+    .cta-inner h2{font-size:clamp(28px,4vw,54px);font-weight:700;letter-spacing:-.04em;margin-bottom:14px;}
+    .cta-inner p{color:var(--subtle);font-size:.97rem;max-width:440px;margin:0 auto 36px;line-height:1.76;}
+    .store-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+    .s-btn{display:flex;align-items:center;gap:10px;background:var(--text);color:#000;padding:12px 20px;border-radius:100px;text-decoration:none;font-weight:600;font-size:.84rem;transition:opacity .2s,transform .2s;}
+    .s-btn:hover{opacity:.9;transform:translateY(-2px);}
+    .s-icon{font-size:1.2rem;}
+    .s-sub{font-size:.55rem;font-weight:400;opacity:.55;display:block;text-transform:uppercase;letter-spacing:.06em;margin-bottom:1px;}
+
+    /* ── FOOTER ── */
+    footer{border-top:0.5px solid var(--border);padding:48px 0 28px;}
+    .ft{display:flex;justify-content:space-between;align-items:flex-start;gap:32px;flex-wrap:wrap;margin-bottom:36px;}
+    .ft-brand p{font-size:.78rem;color:var(--subtle);max-width:200px;line-height:1.65;margin-top:8px;}
+    .ft-col h4{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:12px;}
+    .ft-col ul{list-style:none;display:flex;flex-direction:column;gap:8px;}
+    .ft-col a{font-size:.8rem;color:var(--subtle);text-decoration:none;transition:color .2s;}
+    .ft-col a:hover{color:var(--text);}
+    .ft-bottom{display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:0.5px solid var(--border);font-size:.73rem;color:var(--subtle);flex-wrap:wrap;gap:8px;}
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:960px){
+      .nav-center{display:none;}
+      .nav-burger{display:flex;}
+      .feat-grid,.feat-grid.reverse{grid-template-columns:1fr;gap:40px;direction:ltr;}
+      .feat-grid.reverse>*{direction:ltr;}
+      .feat-copy{max-width:100%;text-align:center;}
+      .how-grid{grid-template-columns:1fr;}
+      .cat-grid{grid-template-columns:repeat(3,1fr);}
+      .bento{grid-template-columns:1fr 1fr;} .b-wide{grid-column:span 1;}
+      .reviews-grid{grid-template-columns:1fr;}
+      .pricing-grid{grid-template-columns:1fr;max-width:380px;}
     }
-    a {
-      display: block; color: #6366f1; font-size: 14px;
-      text-decoration: none; margin-top: 16px;
+    @media(max-width:600px){
+      .hero h1{font-size:clamp(36px,9vw,52px);}
+      .cat-grid{grid-template-columns:repeat(2,1fr);}
+      .bento{grid-template-columns:1fr;}
+      .cta-inner{padding:48px 20px;}
+      .ft{flex-direction:column;}
+      .stats-inner{flex-wrap:wrap;}
+      .stat-item{min-width:50%;border-left:none !important;}
+      .stat-item:nth-child(odd){border-right:0.5px solid var(--border);}
+      .stat-item:nth-child(1),.stat-item:nth-child(2){border-bottom:0.5px solid var(--border);}
+      .feat-section{min-height:auto;padding:70px 0;}
     }
-    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="icon">🧾</div>
-    <h1>TallyShot</h1>
-    <p>Snap a receipt. AI reads it. Done.<br/>
-    Coming soon to the Google Play Store.</p>
-    <span class="badge">Coming soon</span>
-    <a href="privacy-policy.html">Privacy Policy</a>
+<div id="cursor-glow"></div>
+
+<!-- NAV -->
+<nav id="mainNav">
+  <a href="#" class="nav-logo"><div class="logo-mark">🧾</div>TallyShot</a>
+  <div class="nav-center">
+    <a href="#how">How It Works</a>
+    <a href="#categories">Categories</a>
+    <a href="#features">Features</a>
+    <a href="#faq">FAQ</a>
+    <a href="#pricing">Pricing</a>
   </div>
+  <div class="nav-end">
+    <a href="#download" class="nav-cta">Download Free</a>
+    <button class="nav-burger" id="navBurger" aria-label="Menu">
+      <svg width="18" height="13" viewBox="0 0 18 13" fill="none"><rect width="18" height="1.5" rx=".75" fill="currentColor"/><rect y="5.75" width="18" height="1.5" rx=".75" fill="currentColor"/><rect y="11.5" width="18" height="1.5" rx=".75" fill="currentColor"/></svg>
+    </button>
+  </div>
+</nav>
+<div class="mob-menu" id="mobMenu">
+  <button class="mob-close" id="mobClose">✕</button>
+  <a href="#how">How It Works</a>
+  <a href="#categories">Categories</a>
+  <a href="#features">Features</a>
+  <a href="#faq">FAQ</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#download" class="mob-cta-link">Download Free</a>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">🧾 AI-Powered Receipt Scanning</div>
+  <h1>Snap a receipt.<br><span class="grad">AI reads it. Done.</span></h1>
+  <p class="hero-sub">Point your camera at any receipt. TallyShot extracts the merchant, amount, date, and category in seconds — no typing, no spreadsheets, no stress.</p>
+  <div class="hero-btns">
+    <a href="#download" class="btn-primary">Download Free</a>
+    <a href="#how" class="btn-secondary">See how it works →</a>
+  </div>
+  <div class="hero-trust">
+    <span class="trust-item"><span class="trust-check">✓</span> 10 free AI scans</span>
+    <span class="trust-item"><span class="trust-check">✓</span> No account needed</span>
+    <span class="trust-item"><span class="trust-check">✓</span> Tax-ready exports</span>
+    <span class="trust-item"><span class="trust-check">✓</span> 100% private</span>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="container">
+    <div class="stats-inner">
+      <div class="stat-item"><div class="stat-n">&lt;5s</div><div class="stat-l">Per Receipt</div></div>
+      <div class="stat-item"><div class="stat-n">10</div><div class="stat-l">Categories</div></div>
+      <div class="stat-item"><div class="stat-n">CSV</div><div class="stat-l">Tax-Ready Export</div></div>
+      <div class="stat-item"><div class="stat-n">Free</div><div class="stat-l">To Start</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MARQUEE -->
+<div class="mq-wrap"><div class="mq-track" id="mq"></div></div>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <div class="container">
+    <div class="how-header">
+      <div class="sec-eyebrow" data-reveal>How It Works</div>
+      <h2 class="sec-title" data-reveal data-delay="80">Three steps to organised expenses</h2>
+      <p class="sec-sub" data-reveal data-delay="160">No manual entry. No formatting. Just point, scan, and move on with your day.</p>
+    </div>
+    <div class="how-grid">
+      <div class="how-card" data-reveal data-delay="0">
+        <div class="how-step">1</div>
+        <div class="how-title">Snap the receipt</div>
+        <div class="how-desc">Open the camera and photograph any receipt — paper, screen, crumpled, faded. TallyShot handles them all.</div>
+        <div class="how-tag">Any receipt · Any condition</div>
+      </div>
+      <div class="how-card" data-reveal data-delay="80">
+        <div class="how-step">2</div>
+        <div class="how-title">AI extracts everything</div>
+        <div class="how-desc">Merchant name, total amount, date, currency, and category — all read and categorised automatically. Review in one tap if needed.</div>
+        <div class="how-tag">AI-powered · Instant results</div>
+      </div>
+      <div class="how-card" data-reveal data-delay="160">
+        <div class="how-step">3</div>
+        <div class="how-title">Track, analyse, export</div>
+        <div class="how-desc">Your expenses are searchable, filterable, and ready to export as CSV for your accountant — tax deductibles highlighted automatically.</div>
+        <div class="how-tag">Search · Filter · Export</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURE 1: AI SCANNING -->
+<section class="feat-section" id="scan-feature">
+  <div class="container">
+    <div class="feat-grid">
+      <div class="feat-copy" data-reveal-left>
+        <div class="sec-eyebrow">AI Scanning</div>
+        <h2 class="feat-headline">Never type an expense again.</h2>
+        <p class="feat-body">TallyShot's AI reads every field from your receipt — even handwritten totals, crumpled paper, and screen glare. If it needs a second look, you get a one-tap review flow rather than a failed scan.</p>
+        <div class="feat-points">
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(245,158,11,0.1)">📸</div>
+            <div><div class="feat-pt-title">Works on any receipt</div><div class="feat-pt-desc">Paper, digital, faded, handwritten. If there's a total on it, TallyShot will find it.</div></div>
+          </div>
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(129,140,248,0.1)">⚡</div>
+            <div><div class="feat-pt-title">Results in under 5 seconds</div><div class="feat-pt-desc">Faster than typing a single line into a spreadsheet. Your receipt is categorised before you've put it in your pocket.</div></div>
+          </div>
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(52,199,89,0.1)">✅</div>
+            <div><div class="feat-pt-title">Smart review flow</div><div class="feat-pt-desc">When AI isn't certain, you see exactly what to fix — not a generic error. One tap, confirmed.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="phone-scene" data-reveal-right>
+        <div class="phone-float">
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="pscr">
+              <div class="ph-header">
+                <div class="ph-brand">
+                  <div class="ph-brand-mark">🧾</div>
+                  <div class="ph-brand-name">TallyShot</div>
+                </div>
+                <div class="ph-month-total">
+                  <div class="ph-month-lbl">THIS MONTH</div>
+                  <div class="ph-month-amt">£1,248.40</div>
+                </div>
+              </div>
+              <div class="ph-search">
+                <span style="font-size:.6rem;color:var(--subtle)">🔍</span>
+                <span class="ph-search-txt">Search receipts...</span>
+              </div>
+              <div class="ph-chips">
+                <div class="ph-chip" style="background:rgba(129,140,248,0.15);border-color:rgba(129,140,248,0.3);color:#a5b4fc">All</div>
+                <div class="ph-chip" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.3);color:var(--amber)">⚠ Needs review (2)</div>
+                <div class="ph-chip" style="background:rgba(255,255,255,0.04);border-color:var(--border);color:var(--subtle)">Tax deductible</div>
+              </div>
+              <div class="ph-receipt">
+                <div class="ph-r-icon" style="background:rgba(129,140,248,0.12)">✈️</div>
+                <div class="ph-r-mid">
+                  <div class="ph-r-merchant">British Airways</div>
+                  <div class="ph-r-meta">15 May · Travel</div>
+                </div>
+                <div class="ph-r-amount">£342.50</div>
+              </div>
+              <div class="ph-receipt">
+                <div class="ph-r-icon" style="background:rgba(245,158,11,0.1)">🍔</div>
+                <div class="ph-r-mid">
+                  <div class="ph-r-merchant">Dishoom</div>
+                  <div class="ph-r-meta">14 May · Food & Drink</div>
+                </div>
+                <div class="ph-r-amount">£84.20</div>
+              </div>
+              <div class="ph-receipt flagged">
+                <div class="ph-r-icon" style="background:rgba(245,158,11,0.15)">⚠️</div>
+                <div class="ph-r-mid">
+                  <div class="ph-r-merchant">Needs review</div>
+                  <div class="ph-r-meta">13 May · Failed to read</div>
+                </div>
+                <div class="ph-r-amount" style="color:var(--amber)">—</div>
+              </div>
+              <div class="ph-receipt">
+                <div class="ph-r-icon" style="background:rgba(52,199,89,0.1)">💻</div>
+                <div class="ph-r-mid">
+                  <div class="ph-r-merchant">Apple — MacBook</div>
+                  <div class="ph-r-meta">12 May · Office & Tech · 🟢</div>
+                </div>
+                <div class="ph-r-amount">£1,299.00</div>
+              </div>
+              <div class="ph-scan-btn">
+                <span style="font-size:.7rem">📷</span>
+                <span class="ph-scan-txt">Scan Receipt</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURE 2: STATS -->
+<section class="feat-section" id="stats-feature">
+  <div class="container">
+    <div class="feat-grid reverse">
+      <div class="phone-scene" data-reveal-left>
+        <div class="phone-float" style="animation-duration:9s">
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="pscr">
+              <div style="font-size:.9rem;font-weight:800;letter-spacing:-.03em;color:#f5f5f7;margin-bottom:4px">Spending Stats</div>
+              <div style="font-size:.48rem;color:var(--subtle);margin-bottom:14px">May 2026</div>
+              <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:12px;margin-bottom:10px">
+                <div style="font-size:.44rem;color:var(--subtle);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Total Spend</div>
+                <div style="font-size:1.4rem;font-weight:800;letter-spacing:-.04em;color:#f5f5f7">£1,248.40</div>
+                <div style="font-size:.46rem;color:var(--green);margin-top:3px">↓ 12% vs last month</div>
+              </div>
+              <div class="ph-stats">
+                <div class="ph-stat-bar-row">
+                  <div class="ph-stat-bar-label"><span>Office & Tech</span><span style="color:var(--indigo)">£1,299</span></div>
+                  <div class="ph-stat-bar-track"><div class="ph-stat-bar-fill" style="width:82%;background:var(--indigo)"></div></div>
+                </div>
+                <div class="ph-stat-bar-row">
+                  <div class="ph-stat-bar-label"><span>Travel</span><span style="color:var(--amber)">£342</span></div>
+                  <div class="ph-stat-bar-track"><div class="ph-stat-bar-fill" style="width:54%;background:var(--amber)"></div></div>
+                </div>
+                <div class="ph-stat-bar-row">
+                  <div class="ph-stat-bar-label"><span>Food & Drink</span><span style="color:var(--green)">£180</span></div>
+                  <div class="ph-stat-bar-track"><div class="ph-stat-bar-fill" style="width:36%;background:var(--green)"></div></div>
+                </div>
+                <div class="ph-stat-bar-row">
+                  <div class="ph-stat-bar-label"><span>Transport</span><span>£95</span></div>
+                  <div class="ph-stat-bar-track"><div class="ph-stat-bar-fill" style="width:22%;background:rgba(129,140,248,0.5)"></div></div>
+                </div>
+                <div class="ph-stat-bar-row">
+                  <div class="ph-stat-bar-label"><span>Other</span><span>£42</span></div>
+                  <div class="ph-stat-bar-track"><div class="ph-stat-bar-fill" style="width:10%;background:rgba(255,255,255,0.2)"></div></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;margin-top:12px">
+                <div style="flex:1;background:rgba(52,199,89,0.08);border:1px solid rgba(52,199,89,0.2);border-radius:10px;padding:9px 10px">
+                  <div style="font-size:.43rem;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Tax Deductible</div>
+                  <div style="font-size:.85rem;font-weight:800;color:#f5f5f7">£1,641</div>
+                </div>
+                <div style="flex:1;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:10px;padding:9px 10px">
+                  <div style="font-size:.43rem;color:var(--amber);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Receipts</div>
+                  <div style="font-size:.85rem;font-weight:800;color:#f5f5f7">24 total</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="feat-copy" data-reveal-right>
+        <div class="sec-eyebrow">Spending Intelligence</div>
+        <h2 class="feat-headline">Know exactly where your money goes.</h2>
+        <p class="feat-body">Monthly breakdowns by category, trend comparisons, and tax-deductible totals highlighted automatically. Your accountant will love you.</p>
+        <div class="feat-points">
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(129,140,248,0.1)">📊</div>
+            <div><div class="feat-pt-title">Category breakdowns</div><div class="feat-pt-desc">See exactly how much went on travel, food, office gear, and more — every month, automatically.</div></div>
+          </div>
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(52,199,89,0.1)">🟢</div>
+            <div><div class="feat-pt-title">Tax deductible tracking</div><div class="feat-pt-desc">Mark receipts as tax deductible. Your running total is always visible — ready for self-assessment.</div></div>
+          </div>
+          <div class="feat-point">
+            <div class="feat-icon" style="background:rgba(245,158,11,0.1)">📈</div>
+            <div><div class="feat-pt-title">Month-over-month trends</div><div class="feat-pt-desc">Spending up or down? TallyShot shows you the delta so you can course-correct before it's a problem.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CATEGORIES GRID -->
+<section class="cat-section" id="categories">
+  <div class="container">
+    <div class="cat-header">
+      <div class="sec-eyebrow" data-reveal>10 Categories</div>
+      <h2 class="sec-title" data-reveal data-delay="80">Auto-categorised, every time</h2>
+      <p class="sec-sub" data-reveal data-delay="160" style="max-width:480px;margin:0 auto">AI assigns the right category on scan. Override in one tap whenever needed.</p>
+    </div>
+    <div class="cat-grid">
+      <div class="cat-card" data-reveal data-delay="0" style="--cc:#f59e0b"><span class="cat-emoji">🍔</span><div class="cat-name">Food & Drink</div><div class="cat-tag">Restaurants, cafes, takeaway</div></div>
+      <div class="cat-card" data-reveal data-delay="40" style="--cc:#818cf8"><span class="cat-emoji">✈️</span><div class="cat-name">Travel</div><div class="cat-tag">Flights, hotels, trips</div></div>
+      <div class="cat-card" data-reveal data-delay="80" style="--cc:#34c759"><span class="cat-emoji">🚗</span><div class="cat-name">Transport</div><div class="cat-tag">Trains, taxis, fuel</div></div>
+      <div class="cat-card" data-reveal data-delay="120" style="--cc:#a78bfa"><span class="cat-emoji">🏨</span><div class="cat-name">Accommodation</div><div class="cat-tag">Hotels, Airbnb, rentals</div></div>
+      <div class="cat-card" data-reveal data-delay="160" style="--cc:#60a5fa"><span class="cat-emoji">💻</span><div class="cat-name">Office & Tech</div><div class="cat-tag">Gear, software, supplies</div></div>
+      <div class="cat-card" data-reveal data-delay="0" style="--cc:#fbbf24"><span class="cat-emoji">⚡</span><div class="cat-name">Utilities</div><div class="cat-tag">Bills, subscriptions</div></div>
+      <div class="cat-card" data-reveal data-delay="40" style="--cc:#f87171"><span class="cat-emoji">🏥</span><div class="cat-name">Healthcare</div><div class="cat-tag">Medical, pharmacy, dental</div></div>
+      <div class="cat-card" data-reveal data-delay="80" style="--cc:#fb923c"><span class="cat-emoji">🎟️</span><div class="cat-name">Entertainment</div><div class="cat-tag">Events, cinema, sport</div></div>
+      <div class="cat-card" data-reveal data-delay="120" style="--cc:#e879f9"><span class="cat-emoji">🛍️</span><div class="cat-name">Shopping</div><div class="cat-tag">Retail, online, gifts</div></div>
+      <div class="cat-card" data-reveal data-delay="160" style="--cc:#94a3b8"><span class="cat-emoji">🏷️</span><div class="cat-name">Other</div><div class="cat-tag">Everything else</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FEATURES BENTO -->
+<section class="features-section" id="features">
+  <div class="container">
+    <div class="features-hdr">
+      <div class="sec-eyebrow" data-reveal>Features</div>
+      <h2 class="sec-title" data-reveal data-delay="80">Everything you need. Nothing you don't.</h2>
+      <p class="sec-sub" data-reveal data-delay="160">Built for freelancers, small business owners, and anyone who hates expense admin.</p>
+    </div>
+    <div class="bento">
+      <div class="b-card b-wide b-amber" data-reveal data-delay="0">
+        <span class="b-icon">📸</span>
+        <div class="b-title">AI Receipt Scanning — Any Receipt, Any Condition</div>
+        <div class="b-desc">Paper, screen, crumpled, handwritten — TallyShot reads them all. Merchant, amount, date, currency, and category extracted automatically in under 5 seconds.</div>
+      </div>
+      <div class="b-card b-indigo" data-reveal data-delay="80">
+        <span class="b-icon">📊</span>
+        <div class="b-title">Spending Stats</div>
+        <div class="b-desc">Monthly breakdowns by category with trend comparisons. See where your money actually goes.</div>
+      </div>
+      <div class="b-card" data-reveal data-delay="0">
+        <span class="b-icon">🔍</span>
+        <div class="b-title">Search & Filter</div>
+        <div class="b-desc">Find any receipt instantly. Filter by category, tax status, or needs-review. Full-text search across merchants and dates.</div>
+      </div>
+      <div class="b-card b-wide b-green" data-reveal data-delay="80">
+        <span class="b-icon">🟢</span>
+        <div class="b-title">Tax Deductible Tracking</div>
+        <div class="b-desc">Mark expenses as tax-deductible. Your running deductible total is always visible. Export time: your accountant gets a clean, itemised CSV — deductibles flagged.</div>
+      </div>
+      <div class="b-card" data-reveal data-delay="0">
+        <span class="b-icon">📁</span>
+        <div class="b-title">CSV Export</div>
+        <div class="b-desc">One tap to export everything as a clean CSV. Pro feature — your accountant, your spreadsheet, your rules.</div>
+      </div>
+      <div class="b-card b-indigo" data-reveal data-delay="80">
+        <span class="b-icon">⚡</span>
+        <div class="b-title">Quick Scan (Pro)</div>
+        <div class="b-desc">Skip the review step for confident reads. Point, scan, done — TallyShot saves automatically when AI confidence is high.</div>
+      </div>
+      <div class="b-card" data-reveal data-delay="0">
+        <span class="b-icon">🔒</span>
+        <div class="b-title">100% Private</div>
+        <div class="b-desc">Your receipts live on your device. Nothing is shared or sold. No account required to get started.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- REVIEWS -->
+<section class="reviews-section">
+  <div class="container">
+    <div class="reviews-hdr">
+      <div class="sec-eyebrow" data-reveal>Early Users</div>
+      <h2 class="sec-title" data-reveal data-delay="80">What people are saying</h2>
+    </div>
+    <div class="reviews-grid">
+      <div class="r-card" data-reveal data-delay="0">
+        <div class="r-stars">★★★★★</div>
+        <p class="r-text">"I used to dump receipts in a shoebox and spend a weekend before tax season entering them manually. TallyShot replaced that entirely. I scan as I go now — takes seconds."</p>
+        <div class="r-author"><div class="r-av" style="background:rgba(129,140,248,0.12)">🇬🇧</div><div><div class="r-name">Marcus T.</div><div class="r-loc">London · Freelance designer</div></div></div>
+      </div>
+      <div class="r-card" data-reveal data-delay="80">
+        <div class="r-stars">★★★★★</div>
+        <p class="r-text">"The tax deductible tracking is the feature I didn't know I needed. I run a small business and knowing my deductible total in real-time has genuinely changed how I think about expenses."</p>
+        <div class="r-author"><div class="r-av" style="background:rgba(245,158,11,0.1)">🇮🇪</div><div><div class="r-name">Siobhan M.</div><div class="r-loc">Dublin · Business owner</div></div></div>
+      </div>
+      <div class="r-card" data-reveal data-delay="160">
+        <div class="r-stars">★★★★★</div>
+        <p class="r-text">"I travel constantly for work and expense reports were a nightmare. Now I scan the receipt before I leave the restaurant. My finance team gets a clean CSV every month with no chasing."</p>
+        <div class="r-author"><div class="r-av" style="background:rgba(52,199,89,0.1)">🇸🇬</div><div><div class="r-name">Daniel K.</div><div class="r-loc">Singapore · Consultant</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="container">
+    <div class="faq-hdr">
+      <div class="sec-eyebrow" data-reveal>FAQ</div>
+      <h2 class="sec-title" data-reveal data-delay="80">Questions you might have</h2>
+      <p class="sec-sub" data-reveal data-delay="160">Everything you need to know before your first scan.</p>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item" data-reveal data-delay="0">
+        <button class="faq-q">Is TallyShot really free?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">Yes — download and get 10 free AI scans with no account and no card required. Each scan includes full AI extraction of merchant, amount, date, currency, and category. Upgrade to Pro when you need more.</div>
+      </div>
+      <div class="faq-item" data-reveal data-delay="60">
+        <button class="faq-q">What kinds of receipts does it work on?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">Paper receipts (even crumpled or faded), screen receipts, handwritten receipts, till rolls — TallyShot handles them all. If the AI isn't confident about a field, you see a focused review screen to confirm or correct just that field, rather than a generic failure.</div>
+      </div>
+      <div class="faq-item" data-reveal data-delay="120">
+        <button class="faq-q">Where are my receipts stored?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">On your device. TallyShot uses local SQLite storage — your receipts never leave your phone without your explicit action. The only data sent externally is the receipt image, sent to the AI during processing, and never stored on our servers after the response is returned.</div>
+      </div>
+      <div class="faq-item" data-reveal data-delay="180">
+        <button class="faq-q">How does the CSV export work?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">Pro subscribers can export all receipts — or a filtered subset — as a CSV file directly from the app. The CSV includes merchant, date, amount, currency, category, and a tax-deductible flag. Share it directly to your accountant, upload it to your accounting software, or open it in Excel.</div>
+      </div>
+      <div class="faq-item" data-reveal data-delay="240">
+        <button class="faq-q">What does "Quick Scan" mean?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">Quick Scan is a Pro feature that skips the confirmation step when AI confidence is high. For most clear receipts, TallyShot saves automatically — you just scan and walk away. For anything ambiguous, it still shows a review screen.</div>
+      </div>
+      <div class="faq-item" data-reveal data-delay="300">
+        <button class="faq-q">Can I cancel Pro anytime?<span class="faq-chev">▾</span></button>
+        <div class="faq-a">Yes, through your Google Play subscription settings. No dark patterns — standard platform cancellation. Your existing receipts and data remain available even after cancellation.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- PRICING -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <div class="pricing-hdr">
+      <div class="sec-eyebrow" data-reveal>Pricing</div>
+      <h2 class="sec-title" data-reveal data-delay="80">Start free. Scale when ready.</h2>
+      <p class="sec-sub" data-reveal data-delay="160">10 free AI scans — no card, no account. Go Pro for unlimited.</p>
+      <div class="p-toggle" data-reveal data-delay="220">
+        <button class="ptb on" id="btnM" onclick="setP('monthly')">Monthly</button>
+        <button class="ptb" id="btnA" onclick="setP('annual')">Annual — save 33%</button>
+      </div>
+    </div>
+    <div class="pricing-grid">
+      <div class="p-card" data-reveal data-delay="0">
+        <div class="p-name">Free</div>
+        <div class="p-price">£0<sub>/mo</sub></div>
+        <div class="p-period">Forever free · no card needed</div>
+        <ul class="p-perks">
+          <li><div class="py">✓</div>10 AI scans to start</li>
+          <li><div class="py">✓</div>All 10 categories</li>
+          <li><div class="py">✓</div>Search & filter</li>
+          <li><div class="py">✓</div>Needs-review flow</li>
+          <li><div class="pn">–</div>Unlimited AI scans</li>
+          <li><div class="pn">–</div>Quick Scan mode</li>
+          <li><div class="pn">–</div>CSV export</li>
+          <li><div class="pn">–</div>Full spending stats</li>
+        </ul>
+        <a href="#download" class="p-btn p-free">Download Free</a>
+      </div>
+      <div class="p-card pro" data-reveal data-delay="100">
+        <div class="p-tag">Most Popular</div>
+        <div class="p-name">Pro</div>
+        <div class="p-price" id="pAmt">£3.99<sub>/mo</sub></div>
+        <div class="p-period" id="pPer">Billed monthly · cancel anytime</div>
+        <ul class="p-perks">
+          <li><div class="py">✓</div>Unlimited AI scans</li>
+          <li><div class="py">✓</div>All 10 categories</li>
+          <li><div class="py">✓</div>Quick Scan mode</li>
+          <li><div class="py">✓</div>CSV export</li>
+          <li><div class="py">✓</div>Full spending stats</li>
+          <li><div class="py">✓</div>Tax deductible tracking</li>
+          <li><div class="py">✓</div>Support indie development</li>
+          <li><div class="py">✓</div>All future features</li>
+        </ul>
+        <a href="#download" class="p-btn p-pro">Get Pro</a>
+      </div>
+    </div>
+    <p class="trial-note" data-reveal data-delay="200">Cancel anytime via Google Play. <strong>No hidden fees.</strong> Your data stays on your device.</p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="download">
+  <div class="container">
+    <div class="cta-inner">
+      <div class="sec-eyebrow" style="justify-content:center;display:flex;margin-bottom:16px;" data-reveal>Download Now</div>
+      <h2 data-reveal data-delay="80">Stop drowning in receipts.<br><span class="grad">Start in 30 seconds.</span></h2>
+      <p data-reveal data-delay="160">Free to start. No account. No card. 10 AI scans the moment you install.</p>
+      <div class="store-btns" data-reveal data-delay="240">
+        <a href="#" class="s-btn"><span class="s-icon">▶</span><div><span class="s-sub">Get it on</span>Google Play</div></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="ft">
+      <div class="ft-brand">
+        <a href="#" class="nav-logo"><div class="logo-mark">🧾</div>TallyShot</a>
+        <p>AI receipt scanning for people who have better things to do than expense reports.</p>
+      </div>
+      <div class="ft-col"><h4>Product</h4><ul><li><a href="#how">How It Works</a></li><li><a href="#categories">Categories</a></li><li><a href="#features">Features</a></li><li><a href="#faq">FAQ</a></li><li><a href="#pricing">Pricing</a></li></ul></div>
+      <div class="ft-col"><h4>Company</h4><ul><li><a href="privacy-policy.html">Privacy Policy</a></li><li><a href="mailto:reeceshaw158@gmail.com">Contact</a></li></ul></div>
+    </div>
+    <div class="ft-bottom"><span>© 2026 TallyShot. All rights reserved.</span><span>Made for freelancers &amp; small businesses 🧾</span></div>
+  </div>
+</footer>
+
+<script>
+// NAV
+const nav=document.getElementById('mainNav');
+window.addEventListener('scroll',()=>{nav.classList.toggle('scrolled',scrollY>44);},{passive:true});
+
+// SCROLL REVEAL
+const revObs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){const d=parseInt(e.target.dataset.delay||'0');setTimeout(()=>e.target.classList.add('revealed'),d);revObs.unobserve(e.target);}});},{threshold:.1});
+document.querySelectorAll('[data-reveal],[data-reveal-left],[data-reveal-right]').forEach(el=>revObs.observe(el));
+
+// MARQUEE
+const CATS=['📸 AI Scanning','🍔 Food & Drink','✈️ Travel','🚗 Transport','🏨 Accommodation','💻 Office & Tech','⚡ Utilities','🏥 Healthcare','🎟️ Entertainment','🛍️ Shopping','🟢 Tax Tracking','📁 CSV Export','🔍 Search & Filter','⚡ Quick Scan'];
+const mq=document.getElementById('mq');
+[...CATS,...CATS].forEach(t=>{const d=document.createElement('div');d.className='mq-item';d.innerHTML=`<b>${t}</b><span class="mq-dot"></span>`;mq.appendChild(d);});
+
+// PRICING TOGGLE
+function setP(m){const a=m==='annual';document.getElementById('btnM').classList.toggle('on',!a);document.getElementById('btnA').classList.toggle('on',a);document.getElementById('pAmt').innerHTML=a?'£2.66<sub>/mo</sub>':'£3.99<sub>/mo</sub>';document.getElementById('pPer').textContent=a?'£31.99/year · cancel anytime':'Billed monthly · cancel anytime';}
+
+// FAQ
+document.querySelectorAll('.faq-q').forEach(btn=>{btn.addEventListener('click',()=>{const item=btn.closest('.faq-item'),isOpen=item.classList.contains('open');document.querySelectorAll('.faq-item.open').forEach(i=>i.classList.remove('open'));if(!isOpen)item.classList.add('open');});});
+
+// SMOOTH SCROLL
+document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{const el=document.getElementById(a.getAttribute('href').slice(1));if(el){e.preventDefault();el.scrollIntoView({behavior:'smooth'});}});});
+
+// HAMBURGER
+const burger=document.getElementById('navBurger'),mobMenu=document.getElementById('mobMenu'),mobClose=document.getElementById('mobClose');
+function openMob(){mobMenu.classList.add('open');document.body.style.overflow='hidden';}
+function closeMob(){mobMenu.classList.remove('open');document.body.style.overflow='';}
+if(burger)burger.addEventListener('click',openMob);
+if(mobClose)mobClose.addEventListener('click',closeMob);
+if(mobMenu)mobMenu.querySelectorAll('a').forEach(a=>a.addEventListener('click',closeMob));
+
+// CURSOR GLOW
+const cg=document.getElementById('cursor-glow');
+if(cg&&window.matchMedia('(pointer:fine)').matches){window.addEventListener('mousemove',e=>{cg.style.left=e.clientX+'px';cg.style.top=e.clientY+'px';},{passive:true});}
+
+// STAT COUNTERS
+function animCount(el){const raw=el.textContent.trim(),num=parseFloat(raw);if(isNaN(num))return;const prefix=raw.match(/^[^0-9]*/)[0],suffix=raw.match(/[^0-9.]+$/)?.[0]||'',dur=1600,start=performance.now();const step=now=>{const t=Math.min((now-start)/dur,1),e=1-Math.pow(1-t,3),v=num*e;el.textContent=prefix+(num%1!==0?v.toFixed(1):Math.round(v))+suffix;if(t<1)requestAnimationFrame(step);else el.textContent=raw;};requestAnimationFrame(step);}
+const cntObs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){animCount(e.target);cntObs.unobserve(e.target);}}),{threshold:.6});
+document.querySelectorAll('.stat-n').forEach(el=>cntObs.observe(el));
+</script>
 </body>
 </html>

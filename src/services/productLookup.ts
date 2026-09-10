@@ -353,35 +353,58 @@ function strArray(v: unknown): string[] {
 /**
  * Decide what sort of product this is.
  *
- * Alcohol is checked before drink and food because an alcoholic drink is
- * tagged as a beverage too, and the card we want for it is quite different.
- * A recorded ABV above 0.5% is treated as decisive even when the category
- * tags are missing — plenty of imported bottles have thin tagging.
+ * Alcohol is checked before drink and food because an alcoholic drink carries
+ * beverage tags too, and the card we want for it is quite different.
+ *
+ * The `non-alcoholic` check is not defensive padding — it is a real bug fix.
+ * Open Food Facts tags Coca-Cola `en:non-alcoholic-beverages`, which contains
+ * the substring "alcoholic-beverage", so a naive match classified a can of
+ * Coke as alcohol and offered UK unit counts for it. Alcohol-free beer and
+ * de-alcoholised wine hit the same trap, and those are exactly the products
+ * where getting it wrong matters most.
  */
+const ALCOHOL_TAG =
+  /^(?:alcoholic-beverages?|beers?|wines?|spirits|whisk(?:e?y)|vodkas?|rums?|gins?|ciders?|liqueurs?|champagnes?|prosecco|ales?|lagers?|ciders?)$/;
+
+const ALCOHOL_LOOSE = /alcoholic-beverage|\bbeers?\b|\bwines?\b|spirits|whisk|vodka|\brum\b|\bgin\b|cider|liqueur|champagne|prosecco/;
+
 function classifyKind(
   tags: string[],
   abv: number | null,
   fallback: ProductKind
 ): ProductKind {
-  const t = tags.map((x) => x.toLowerCase()).join(' ');
+  const clean = tags.map((x) => x.toLowerCase().replace(/^[a-z]{2}:/, '').trim());
+  const joined = clean.join(' ');
 
-  const alcoholic =
-    /alcoholic-beverage|\bbeers?\b|\bwines?\b|spirits|whisk|vodka|\brum\b|\bgin\b|cider|liqueur|champagne|prosecco/.test(
-      t
-    );
-  if (alcoholic || (abv !== null && abv >= 0.5)) return 'alcohol';
+  // An explicit "no alcohol in this" tag beats every other alcohol signal.
+  const declaredAlcoholFree = clean.some((t) =>
+    /^(?:non-alcoholic|alcohol-free|dealcoholi[sz]ed|non-alcoholic-.*|.*-non-alcoholic)$/.test(t)
+  );
 
-  if (/pet-food|dog|cat-food/.test(t)) return 'petfood';
+  if (!declaredAlcoholFree) {
+    // Prefer an exact tag match; fall back to the loose scan only when no tag
+    // stands alone, so "non-alcoholic-beverages" can never be the trigger.
+    const exact = clean.some((t) => ALCOHOL_TAG.test(t));
+    const loose = clean.some((t) => !t.startsWith('non-') && ALCOHOL_LOOSE.test(t));
+    if (exact || loose) return 'alcohol';
+  }
+
+  // A recorded ABV is decisive even with no useful tags — plenty of imported
+  // bottles are barely categorised. 0.5% is the UK threshold below which a
+  // drink may be labelled alcohol-free.
+  if (abv !== null && abv >= 0.5) return 'alcohol';
+
+  if (/pet-food|dog-food|cat-food/.test(joined)) return 'petfood';
 
   if (
     /\bcosmetic|beauty|skin-care|hair-care|make-up|makeup|shampoo|deodorant|toothpaste|perfume|moisturi/.test(
-      t
+      joined
     )
   ) {
     return 'cosmetic';
   }
 
-  if (/beverage|\bdrinks?\b|juice|\bwaters?\b|sodas|infusion/.test(t)) return 'drink';
+  if (/beverage|\bdrinks?\b|juice|\bwaters?\b|sodas|infusion/.test(joined)) return 'drink';
 
   if (fallback === 'food' && tags.length === 0) return 'food';
   return fallback;
@@ -436,8 +459,12 @@ async function fetchOpenFacts(
 
   const p = json.product;
   const name = str(p.product_name) || str(p.product_name_en) || str(p.generic_name);
-  const brand = str((str(p.brands).split(',')[0] ?? ''));
+  let brand = str((str(p.brands).split(',')[0] ?? ''));
   if (!name && !brand) return null; // a row with neither helps nobody
+
+  // Contributors often put the brand in both fields, so plenty of rows come
+  // back as "Nutella" by "Nutella". Showing it twice looks like a bug.
+  if (brand && name && brand.toLowerCase() === name.toLowerCase()) brand = '';
 
   const nutriments =
     p.nutriments && typeof p.nutriments === 'object'
@@ -451,6 +478,11 @@ async function fetchOpenFacts(
   const countryTags = strArray(p.countries_tags);
   const novaRaw = Number(p.nova_group);
 
+  // OFF returns the literal string "unknown" (and sometimes "not-applicable")
+  // when it cannot compute a grade. Only a-e is a real Nutri-Score.
+  const gradeRaw = str(p.nutriscore_grade).toLowerCase();
+  const grade = /^[a-e]$/.test(gradeRaw) ? gradeRaw : null;
+
   const card = emptyCard(code, barcodeType);
   return {
     ...card,
@@ -462,7 +494,7 @@ async function fetchOpenFacts(
     country: countryTags[0] ? titleCase(countryTags[0]) : '',
     categoriesTags,
     nutriments,
-    nutriscoreGrade: str(p.nutriscore_grade).toLowerCase() || null,
+    nutriscoreGrade: grade,
     novaGroup: Number.isFinite(novaRaw) && novaRaw >= 1 && novaRaw <= 4 ? novaRaw : null,
     ingredientsText: str(p.ingredients_text) || str(p.ingredients_text_en) || null,
     ingredientsOrigin: str(p.ingredients_text) || str(p.ingredients_text_en) ? 'database' : null,

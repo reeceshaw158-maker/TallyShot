@@ -1,5 +1,168 @@
 # TallyShot changelog
 
+## Unreleased — Slice 12: Best-in-class product scanner
+
+Slice 11 made the scanner find products. This slice makes it *tell you about
+them* — ingredients, nutrition, allergens, alcohol units — and fixes the two
+failure modes that dominate 1–2★ reviews of competing barcode scanners.
+
+### Scanning behaviour
+
+**Confirm before scanning (new default).** On a stable read the preview
+freezes on a captured still, every barcode in that still is highlighted, and
+you tap the one you meant. The complaint this answers: scanners that act on
+the first code they decode, before you have finished aiming. On a parcel
+carrying a courier label, a returns label and a product barcode, "first one
+seen" is reliably the wrong one. Settings → Barcode scanner → **Instant scan**
+turns the old behaviour back on.
+
+This had to be built on a captured still rather than the live callback.
+expo-camera's Android analyzer calls `barcodes.first()` and discards the rest
+of the frame's results before they ever reach JavaScript, so the live callback
+structurally cannot report that there are three codes in shot.
+`scanFromURLAsync` on the still returns all of them.
+
+**Blur defence.** expo-camera's `autofocus` prop is iOS-only, so on Android
+there is no way to ask whether focus has settled. Instead a code must decode
+*identically on 3 consecutive frames* before we act — a decent proxy for
+"focus has stopped moving" — and the still we then freeze on is taken through
+the full camera pipeline, so it is sharper than a live analysis frame anyway.
+
+**All retail formats stay enabled**: EAN-13, EAN-8, UPC-A, UPC-E, QR,
+Data Matrix, Code 39/93/128, ITF-14, Codabar, PDF417, Aztec.
+
+### Product cards, by category
+
+- **Food & drink** — photo, Nutri-Score, NOVA, kcal, and UK FSA traffic
+  lights per 100g/100ml, plus ingredients, declared allergens and additives.
+- **Alcohol** — ABV and UK units per container and per multipack. Factual
+  content only; no health framing either way.
+- **Cosmetics** — the INCI list where a database has one, and where it does
+  not, a "photograph the ingredients" button that transcribes it.
+- **Everything else** — name, brand, category, photo.
+
+Every card carries one neutral guidance line ("High in fat, saturates and
+sugars", "Contains 2 things you flagged: dairy and tree nuts"), a permanent
+**"Not medical or dietary advice"** footer, and ODbL attribution where the
+data came from the Open Food Facts family.
+
+### Your own flags
+
+Settings → **Highlight on scan**: the 14 UK/EU declarable allergens plus six
+cosmetic concerns (fragrance, parabens, sulphates, denatured alcohol,
+silicones, formaldehyde releasers). Matches are shown with how firm they are —
+declared on the label, "may contain", or found by reading the ingredient text.
+
+### Alternatives
+
+Products graded Nutri-Score D or E get a **"Show better-scoring products"**
+button, listing Nutri-Score A products from the same Open Food Facts category.
+Button-triggered, never automatic — see the rate-limit note below.
+
+### Scan history
+
+New screen (Settings → Barcode scanner → Scan history): search by name, brand
+or barcode digits, filter by category, swipe to delete with a 5-second undo.
+Tapping a row reopens the product, answered instantly and offline from cache.
+
+### Under the hood
+
+**Moved to the Open Food Facts v3 API — for rate-limit reasons, not novelty.**
+OFF publishes a ceiling of 15 product reads/min/IP and reserves the right to
+IP-ban over it. The v2 code sent two barcode forms (12-digit UPC-A and 13-digit
+EAN) to each of four databases, so one scan could cost 8 requests and two scans
+in a minute put a user at the edge of a ban. v3 normalises GTINs server-side —
+verified live, `049000006346` and `0049000006346` return the identical product
+— so one canonical candidate now goes to each source. Worst case is 5 requests,
+and a sliding-window budget stops at 12/min for headroom, degrading to
+"couldn't check everything" rather than a false "not in any database".
+
+Misses are cached for 6 hours: long enough that a re-scan doesn't burn the
+budget, short enough that a product added today is findable tomorrow.
+
+Note for future work: v3 reports a normalised barcode as
+`status: "success_with_warnings"`, not `"success"`, so `result.id` is the only
+safe found/not-found check.
+
+**New Worker mode `ingredients`** transcribes an ingredient list from a photo
+of a pack. This exists because Open Beauty Facts has names and photos for most
+cosmetics but almost no INCI lists — of four real Nivea/L'Oréal products
+sampled, none had one. The prompt is transcription-only and explicitly
+forbidden from judging ingredients, so the wording on the card is identical
+whether the list came from a database or your camera.
+
+### Bugs found and fixed while building this
+
+- **"Sans gluten" read as "contains gluten".** Nutella's ingredient text ends
+  with the French for *gluten-free*, and a naive substring search told a
+  coeliac user the jar contained it. Flag matching now rejects a hit when a
+  negator sits either side, in English, French, Spanish, German, Italian,
+  Dutch and Swedish.
+- **Coca-Cola classified as alcohol.** OFF tags it
+  `en:non-alcoholic-beverages`, which contains the substring
+  "alcoholic-beverage". The card was offering UK unit counts for a can of
+  Coke. Alcohol-free beer and de-alcoholised wine hit the same trap.
+- **expo-camera returns two different types for `type`.** The live callback
+  maps ML Kit's numeric format to `"ean13"`; `scanFromURLAsync` on Android
+  serialises the raw constant and returns `32` — despite both being typed
+  `string`. A UPC-E picked off the frozen frame would have arrived as
+  `"1024"`, failed every `type.includes('upc_e')` check and silently skipped
+  expansion. Normalised in one place now.
+- **Nutri-Score showed "unknown" as a grade.** Only a–e is real.
+- **Products displayed as "Nutella" by "Nutella"** — an identical brand and
+  name is now shown once.
+- **A paywall banner on a free feature.** The red "monthly limit reached, tap
+  to unlock" bar rendered in barcode mode too. Barcode scanning costs nothing
+  and never has; the banner is now receipt-mode only.
+- Frozen stills are deleted on every exit path instead of accumulating.
+
+### Not medical advice
+
+Every string the nutrition engine produces restates the label and never
+diagnoses the person. "High in sugar" is a fact about the jar. There is no
+wording anywhere that predicts a health outcome or tells the user what to eat.
+
+### Files
+
+- `src/services/nutrition.ts` (new) — FSA thresholds, NOVA, alcohol units,
+  flag matching, guidance lines. Pure functions, no network, no state.
+- `src/services/productLookup.ts` — v3 rewrite, `ProductCard`, rate budget,
+  category classifier, alternatives search.
+- `src/components/ProductCard.tsx` (new), `src/components/BarcodePicker.tsx` (new)
+- `src/db/scanHistory.ts` (new), `src/db/barcodeCache.ts`, `src/db/schema.ts`
+- `app/scan-history.tsx` (new), `app/capture.tsx`, `app/(tabs)/settings.tsx`,
+  `app/_layout.tsx`, `src/stores/appStore.ts`, `src/services/detection.ts`
+- `worker/src/index.ts`, `worker/wrangler.toml`
+
+### New dependency
+
+`expo-clipboard` — for the copy action on the decoded barcode value.
+
+### Verification
+
+- `npx tsc --noEmit` → 0 errors
+- `npx expo export --platform android` → clean bundle
+- 51 assertions over the FSA boundary values, the NHS alcohol-unit worked
+  example (5.2% × 568ml = 2.95 units), the negation cases and real Open Food
+  Facts payloads
+- Live chain tested against real barcodes: Nutella (Nutri-Score E, NOVA 4,
+  3 allergens), Coca-Cola (kind=drink), a US 12-digit UPC-A (proves v3
+  normalisation), 1664 / Corona / Grimbergen (kind=alcohol, 1.38 / 1.49 /
+  1.68 units), and a nonexistent code (clean miss path)
+
+### ⚠️ Known blocker, not caused by this slice
+
+The Anthropic API key behind the Worker has **no credit**:
+`"Your credit balance is too low to access the Anthropic API."` Every AI
+feature is down until it is topped up — receipt extraction, AI camera assist,
+the AI barcode guess and the new ingredients reader. The untouched `lookup`
+mode fails identically, so this predates this slice.
+
+The free database chain — which is the bulk of the scanner — does not use the
+Worker at all and works normally.
+
+---
+
 ## Unreleased — Slice 11: Worldwide barcode lookup chain
 
 The barcode scanner no longer relies on AI guessing alone. Scans now run a

@@ -15,6 +15,10 @@ compatibility_flags = ["nodejs_compat"]
 # DETECT_MODEL runs on a timer while the camera is open, so keep it cheap.
 #   The Worker sends no `effort`/`thinking` on the detect path, so Haiku is
 #   safe here and an Opus-tier model would be wasted money.
+# INGREDIENTS_MODEL transcribes ingredient panels from a photo of a pack.
+#   Small print, and a misread allergen is the worst error the app can make,
+#   so this stays on an Opus-tier model rather than the cheap detect tier.
 EXTRACT_MODEL = "claude-opus-5"
 DETECT_MODEL = "claude-haiku-4-5"
 LOOKUP_MODEL = "claude-opus-5"
+INGREDIENTS_MODEL = "claude-opus-5"

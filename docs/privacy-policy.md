@@ -18,8 +18,10 @@ The app stores the following data **on your device only**:
 
 - Receipt photos you take or import
 - Receipt details you save (merchant, date, amounts, line items, category, notes, payment method, tax-deductible flag)
-- Your settings (chosen region, tax mode, currency, theme, AI scan counter)
+- Your settings (chosen region, tax mode, currency, theme, AI scan counter, scanner preferences)
+- Any ingredients or allergens you choose to flag in Settings, so scans can highlight them. This list stays on your device and is never sent anywhere — matching happens locally, on data already fetched.
 - A cache of product barcodes you have scanned and the product details found for them (so rescans are instant and work offline)
+- Your scan history: the products you have scanned and when
 
 This data lives in a SQLite database in the app's private storage area and in image files in the app's private documents directory. **We do not have a server-side copy of any of it.**
 
@@ -40,6 +42,10 @@ When you scan a **product barcode**, TallyShot sends **only the barcode digits**
 - **UPCitemdb** (a general product database; see the [UPCitemdb terms](https://www.upcitemdb.com/wp/docs/main/terms-of-service/))
 
 These requests contain no account, name, photo, or receipt data — just the barcode number, which identifies a product, not a person. If no database knows the product, you can optionally ask our AI proxy for a best guess; that request likewise contains only the barcode digits. Successful results are cached on your device so rescanning the same product needs no network call at all.
+
+If a product has no ingredient list on file, you can optionally tap **"Photograph the ingredients"**. Only then, and only when you tap it, is a photo of the pack sent to our AI proxy to be transcribed — the same processors and the same retention (none) as receipt photos. Nothing is sent unless you press that button.
+
+The ingredients and allergens you flag in Settings are **never transmitted**. Matching runs entirely on your device against data already fetched.
 
 **No analytics, ads, tracking SDKs, crash reporters, or third-party libraries with their own data collection are bundled with the app.** No data is sent to us beyond the AI extraction call.
 

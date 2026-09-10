@@ -127,6 +127,7 @@ export default function RootLayout() {
         <Stack.Screen name="export" options={{ title: 'Export' }} />
         <Stack.Screen name="preview" options={{ title: 'Preview' }} />
         <Stack.Screen name="archived" options={{ title: 'Archived Receipts' }} />
+        <Stack.Screen name="scan-history" options={{ title: 'Scan history' }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
     </PaperProvider>

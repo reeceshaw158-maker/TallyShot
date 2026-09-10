@@ -8,6 +8,7 @@ import { useThemeTokens, SemanticTokens, useActiveScheme } from '../../src/theme
 import { REGION_PRESETS, REGION_ORDER, Region, TaxMode } from '../../src/types';
 import { openManageSubscription } from '../../src/services/subscription';
 import { SummaryMode, PhotoMode } from '../../src/stores/appStore';
+import { FLAG_DEFS, type DietaryFlag } from '../../src/services/nutrition';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'NZD', 'CAD', 'JPY'];
 const THEMES: { value: 'light' | 'dark' | 'system'; label: string; icon: string }[] = [
@@ -25,6 +26,11 @@ export default function SettingsScreen() {
   const currency = useAppStore((s) => s.currency);
   const themeMode = useAppStore((s) => s.theme);
   const quickScan = useAppStore((s) => s.quickScan);
+  const instantScan = useAppStore((s) => s.instantScan);
+  const setInstantScan = useAppStore((s) => s.setInstantScan);
+  const dietaryFlags = useAppStore((s) => s.dietaryFlags);
+  const toggleDietaryFlag = useAppStore((s) => s.toggleDietaryFlag);
+  const clearDietaryFlags = useAppStore((s) => s.clearDietaryFlags);
   const region = useAppStore((s) => s.region);
   const taxMode = useAppStore((s) => s.taxMode);
   const taxLabel = useAppStore((s) => s.taxLabel);
@@ -248,6 +254,93 @@ export default function SettingsScreen() {
         </View>
       </Section>
 
+      {/* Barcode scanner */}
+      <Section tokens={t} title="BARCODE SCANNER">
+        <ToggleRow
+          tokens={t}
+          icon="flash"
+          title="Instant scan"
+          subtitle="Act on the first barcode as soon as it reads. Faster, but on a parcel or a shelf label with more than one barcode it can grab the wrong one. Off means the picture freezes first so you can confirm which code you meant."
+          value={instantScan}
+          onValueChange={setInstantScan}
+        />
+        <View style={[styles.divider, { backgroundColor: t.border }]} />
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={() => router.push('/scan-history')}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.optionIcon, { backgroundColor: t.surfaceElevated }]}>
+            <MaterialCommunityIcons name="history" size={18} color={t.textMuted} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.modeTitle, { color: t.textPrimary }]}>Scan history</Text>
+            <Text style={[styles.modeSub, { color: t.textMuted }]}>
+              Everything you have scanned, searchable.
+            </Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={22} color={t.textSubtle} />
+        </TouchableOpacity>
+      </Section>
+
+      {/* Dietary flags */}
+      <Section tokens={t} title="HIGHLIGHT ON SCAN">
+        <View style={styles.subSection}>
+          <Text style={[styles.modeSub, { color: t.textMuted, marginBottom: 12 }]}>
+            Pick anything you want called out when you scan a product. We match it against the
+            ingredients and allergen list and show you what we find — nothing more. This is not
+            medical or dietary advice.
+          </Text>
+
+          {(['food', 'cosmetic'] as const).map((group) => (
+            <View key={group} style={{ marginBottom: 14 }}>
+              <Text style={[styles.subSectionLabel, { color: t.textSubtle }]}>
+                {group === 'food' ? 'Food allergens' : 'Cosmetic ingredients'}
+              </Text>
+              <View style={styles.chipWrap}>
+                {FLAG_DEFS.filter((d) => d.group === group).map((def) => {
+                  const on = dietaryFlags.includes(def.key as DietaryFlag);
+                  return (
+                    <TouchableOpacity
+                      key={def.key}
+                      onPress={() => toggleDietaryFlag(def.key as DietaryFlag)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.flagChip,
+                        {
+                          backgroundColor: on ? t.accent : t.surfaceElevated,
+                          borderColor: on ? t.accent : t.border,
+                        },
+                      ]}
+                    >
+                      {on && (
+                        <MaterialCommunityIcons name="check" size={13} color={t.textInverse} />
+                      )}
+                      <Text
+                        style={[
+                          styles.flagChipText,
+                          { color: on ? t.textInverse : t.textPrimary },
+                        ]}
+                      >
+                        {def.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+
+          {dietaryFlags.length > 0 && (
+            <TouchableOpacity onPress={clearDietaryFlags} activeOpacity={0.7}>
+              <Text style={[styles.modeSub, { color: t.danger }]}>
+                Clear all {dietaryFlags.length} selected
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Section>
+
       {/* Display — net/VAT/gross summary mode */}
       <Section tokens={t} title="DISPLAY">
         {([
@@ -466,6 +559,25 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
 
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    minHeight: 56,
+  },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  flagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    minHeight: 38,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  flagChipText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
   sectionLabel: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 0.8, marginBottom: 8, marginLeft: 4 },
   sectionCard: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
 

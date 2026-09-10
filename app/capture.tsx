@@ -21,7 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore, FREE_SCAN_LIMIT } from '../src/stores/appStore';
@@ -131,7 +131,10 @@ export default function CaptureScreen() {
   const [ready, setReady] = useState(false);
   const [zoomIndex, setZoomIndex] = useState(0);
 
-  const [mode, setMode] = useState<ScanMode>('receipt');
+  // Opened from scan history as /capture?rescan=<barcode>: start in barcode
+  // mode and re-run the lookup, which the on-device cache answers instantly.
+  const { rescan } = useLocalSearchParams<{ rescan?: string }>();
+  const [mode, setMode] = useState<ScanMode>(rescan ? 'barcode' : 'receipt');
   const [detection, setDetection] = useState<Detection | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [aiSuspended, setAiSuspended] = useState(false);
@@ -372,6 +375,16 @@ export default function CaptureScreen() {
       setPhase({ kind: 'notfound', code, type, incomplete: true });
     }
   }, []);
+
+  // Re-open a product from scan history. Runs once; the barcode type is not in
+  // the URL, so pass the code itself and let canonicalBarcode work it out from
+  // the digit count.
+  const rescanDone = useRef(false);
+  useEffect(() => {
+    if (!rescan || rescanDone.current) return;
+    rescanDone.current = true;
+    runDbLookup(rescan, 'ean13');
+  }, [rescan, runDbLookup]);
 
   /**
    * Freeze the preview on a still and find every barcode in it.

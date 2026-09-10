@@ -16,6 +16,7 @@ import {
   useCameraPermissions,
   FlashMode,
   BarcodeScanningResult,
+  scanFromURLAsync,
 } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
@@ -29,17 +30,23 @@ import {
   Detection,
   LOCK_CONFIDENCE,
   detectDocument,
-  lookupToExtraction,
+  readIngredientsFromPhoto,
 } from '../src/services/detection';
 import {
   findProduct,
   aiGuessProduct,
-  ProductLookupResult,
-  SOURCE_LABEL,
-  isOpenFactsSource,
-  OPEN_FACTS_ATTRIBUTION,
+  findAlternatives,
+  cardToExtraction,
+  normaliseBarcodeType,
+  withPhotographedIngredients,
+  isRetailBarcode,
+  type ProductCard,
+  type Alternative,
 } from '../src/services/productLookup';
+import { addScanToHistory } from '../src/db/scanHistory';
 import ScannerOverlay, { ScanMode } from '../src/components/ScannerOverlay';
+import ProductCardView from '../src/components/ProductCard';
+import BarcodePicker, { type DetectedCode, type FrozenFrame } from '../src/components/BarcodePicker';
 import { hapticLight, hapticMedium } from '../src/utils/haptics';
 
 /** How often the AI assist loop asks "where's the receipt?" while hunting. */
@@ -84,6 +91,36 @@ const BARCODE_TYPES = [
   'aztec',
 ] as const;
 
+/**
+ * How many consecutive frames must decode to the *same* value before we act.
+ *
+ * This is the blur defence. expo-camera's `autofocus` prop is iOS-only, so on
+ * Android there is no way to ask the camera whether focus has settled — but a
+ * barcode read off a blurry or half-focused frame is unstable, and one read
+ * off a settled frame repeats. Three identical reads in a row is a decent
+ * proxy for "focus has stopped moving", and it costs a few hundred
+ * milliseconds rather than a wrong product.
+ */
+const STABLE_READS = 3;
+
+/**
+ * Barcode mode's state machine.
+ *
+ *   hunting    → live preview, watching for a stable read
+ *   confirming → preview frozen on a still, user picks which code they meant
+ *   looking    → free database chain in flight
+ *   result     → a product card is up
+ *   notfound   → chain finished with nothing; offer AI guess / manual entry
+ *   ingredients→ back at the camera, aimed at an ingredients panel
+ */
+type ScanPhase =
+  | { kind: 'hunting' }
+  | { kind: 'confirming'; frame: FrozenFrame }
+  | { kind: 'looking'; code: string; type: string }
+  | { kind: 'result'; card: ProductCard }
+  | { kind: 'notfound'; code: string; type: string; incomplete: boolean }
+  | { kind: 'ingredients'; card: ProductCard };
+
 export default function CaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -100,14 +137,20 @@ export default function CaptureScreen() {
   const [aiSuspended, setAiSuspended] = useState(false);
   const [sourceAspect, setSourceAspect] = useState<number | undefined>(undefined);
 
-  const [barcode, setBarcode] = useState<BarcodeScanningResult | null>(null);
-  const [lookup, setLookup] = useState<ProductLookupResult | null>(null);
-  /** Free database chain (cache → Open Food Facts family → UPCitemdb) in flight. */
-  const [lookingUp, setLookingUp] = useState(false);
-  /** Chain exhausted with no match — show the "not in any database" options. */
-  const [notFound, setNotFound] = useState(false);
+  /**
+   * Barcode mode runs as an explicit state machine rather than a pile of
+   * booleans, because the states genuinely exclude one another: you cannot be
+   * confirming a frozen frame and hunting live at the same time, and the old
+   * boolean soup made that easy to get wrong.
+   */
+  const [phase, setPhase] = useState<ScanPhase>({ kind: 'hunting' });
   /** Paid AI-guess call in flight (user-triggered). */
   const [aiLooking, setAiLooking] = useState(false);
+  /** Ingredients-from-photo call in flight (user-triggered). */
+  const [readingIngredients, setReadingIngredients] = useState(false);
+  /** null = not asked yet; [] = asked and there were none. */
+  const [alternatives, setAlternatives] = useState<Alternative[] | null>(null);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
 
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -120,6 +163,8 @@ export default function CaptureScreen() {
   const setAiAssist = useAppStore((s) => s.setAiAssist);
   const currency = useAppStore((s) => s.currency);
   const incrementScanCount = useAppStore((s) => s.incrementScanCount);
+  const instantScan = useAppStore((s) => s.instantScan);
+  const dietaryFlags = useAppStore((s) => s.dietaryFlags);
 
   const canScan = isPro || scansUsedThisMonth < FREE_SCAN_LIMIT;
 
@@ -127,6 +172,14 @@ export default function CaptureScreen() {
   // never ask the camera for a frame at the same time.
   const busyRef = useRef(false);
   const detectSeq = useRef(0);
+
+  /** The code the last live read decoded, and how many times running. */
+  const stableCodeRef = useRef<string | null>(null);
+  const stableCountRef = useRef(0);
+  /** The frozen still on disk, so it can be deleted when we move on. */
+  const frameUriRef = useRef<string | null>(null);
+  /** Latest live read, shown in the viewfinder chip while still hunting. */
+  const [liveCode, setLiveCode] = useState<string | null>(null);
   /** Was the previous poll a lock? Used so the haptic fires on the transition
    *  into a lock, not on every poll that happens to still be locked. */
   const wasLockedRef = useRef(false);
@@ -143,6 +196,20 @@ export default function CaptureScreen() {
   // Pre-warm the Worker so the actual scan feels instant.
   useEffect(() => {
     prewarmWorker();
+  }, []);
+
+  /**
+   * Narrowed phase for dependency arrays. `phase` itself is a new object on
+   * every transition, so depending on the whole thing would rebuild the
+   * barcode callback constantly and reset the camera's scanner.
+   */
+  const phaseKind = phase.kind;
+
+  /** Delete the frozen still. Best-effort — a leftover temp file is harmless. */
+  const discardFrame = useCallback(() => {
+    const uri = frameUriRef.current;
+    frameUriRef.current = null;
+    if (uri) FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
   }, []);
 
   const saveImage = async (uri: string): Promise<string> => {
@@ -225,12 +292,18 @@ export default function CaptureScreen() {
   // Reset per-mode state when switching so stale boxes don't linger.
   useEffect(() => {
     setDetection(null);
-    setBarcode(null);
-    setLookup(null);
-    setNotFound(false);
+    setPhase({ kind: 'hunting' });
+    setLiveCode(null);
+    setAlternatives(null);
+    stableCodeRef.current = null;
+    stableCountRef.current = 0;
+    discardFrame();
     detectSeq.current++;
     wasLockedRef.current = false;
-  }, [mode]);
+  }, [mode, discardFrame]);
+
+  // Leaving the screen with a frozen frame on disk would leak a temp file.
+  useEffect(() => discardFrame, [discardFrame]);
 
   const handleCapture = useCallback(async () => {
     if (!canScan || capturing || busyRef.current || !cameraRef.current) return;
@@ -278,52 +351,156 @@ export default function CaptureScreen() {
   };
 
   /**
-   * The free half of the lookup chain runs the moment a code is scanned —
-   * no button press, no AI-scan cost, no scan-limit gate. Only the AI guess
-   * (handleAiGuess) costs anything, so only it stays behind a button.
+   * The free half of the lookup chain — no button press, no AI-scan cost, no
+   * scan-limit gate. Only the AI guess costs anything, so only it is gated.
    */
-  const runDbLookup = useCallback(async (scan: BarcodeScanningResult) => {
-    setLookingUp(true);
-    setNotFound(false);
+  const runDbLookup = useCallback(async (code: string, type: string) => {
+    setPhase({ kind: 'looking', code, type });
+    setAlternatives(null);
     try {
-      const result = await findProduct(scan.data, String(scan.type ?? 'unknown'));
-      if (result) {
-        hapticLight();
-        setLookup(result);
+      const { card, incomplete } = await findProduct(code, type);
+      if (card) {
+        hapticMedium();
+        setPhase({ kind: 'result', card });
+        addScanToHistory(card);
       } else {
-        setNotFound(true);
+        setPhase({ kind: 'notfound', code, type, incomplete });
       }
     } catch {
-      // Offline or both APIs down — same outcome as a miss: the user still
+      // Offline or every API down — same outcome as a miss: the user still
       // gets AI-guess and manual entry, never a dead end.
-      setNotFound(true);
-    } finally {
-      setLookingUp(false);
+      setPhase({ kind: 'notfound', code, type, incomplete: true });
     }
   }, []);
 
+  /**
+   * Freeze the preview on a still and find every barcode in it.
+   *
+   * The live callback can only ever report one code per frame — expo-camera's
+   * Android analyzer keeps `barcodes.first()` and drops the rest before they
+   * reach JavaScript — so the multi-barcode picker has to work off a captured
+   * still, where `scanFromURLAsync` returns the full list.
+   */
+  const freezeAndConfirm = useCallback(
+    async (fallback: { data: string; type: string }) => {
+      if (busyRef.current || !cameraRef.current) return;
+      busyRef.current = true;
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.7,
+          skipProcessing: false,
+          shutterSound: false,
+        });
+        if (!photo?.uri) throw new Error('no frame');
+
+        cameraRef.current.pausePreview?.();
+        frameUriRef.current = photo.uri;
+
+        let codes: DetectedCode[] = [];
+        try {
+          const found = await scanFromURLAsync(photo.uri, [...BARCODE_TYPES]);
+          codes = found
+            .map((f: any) => ({
+              data: String(f?.data ?? ''),
+              type: normaliseBarcodeType(f?.type),
+              box: f?.bounds?.size?.width
+                ? {
+                    x: f.bounds.origin.x,
+                    y: f.bounds.origin.y,
+                    width: f.bounds.size.width,
+                    height: f.bounds.size.height,
+                  }
+                : null,
+            }))
+            .filter((c: DetectedCode) => c.data);
+        } catch {
+          // ML Kit unavailable on this device, or the still would not load.
+          // Fall through to the live read rather than dead-ending.
+        }
+
+        // The still missed what the live scanner saw (motion, glare). Keep the
+        // live read so the user still gets a confirm step rather than nothing.
+        if (codes.length === 0) {
+          codes = [{ data: fallback.data, type: fallback.type, box: null }];
+        }
+
+        hapticLight();
+        setPhase({
+          kind: 'confirming',
+          frame: {
+            uri: photo.uri,
+            width: photo.width ?? 0,
+            height: photo.height ?? 0,
+            codes,
+          },
+        });
+      } catch {
+        // Could not grab a still — act on the live read, which is still better
+        // than appearing to do nothing.
+        runDbLookup(fallback.data, fallback.type);
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [runDbLookup]
+  );
+
+  /**
+   * Live barcode callback. The camera fires this continuously while a code is
+   * in view, so it holds a stability count and refuses to act unless we are
+   * actually hunting.
+   */
   const onBarcodeScanned = useCallback(
     (result: BarcodeScanningResult) => {
-      // The camera fires this continuously while a code is in view.
-      if (barcode?.data === result.data || lookingUp || lookup || notFound) return;
-      hapticMedium();
-      setBarcode(result);
-      runDbLookup(result);
+      if (phaseKind !== 'hunting' || busyRef.current) return;
+
+      const data = result.data;
+      if (!data) return;
+      const type = normaliseBarcodeType(result.type);
+
+      // Same code again? Count it. A different code means the camera is still
+      // settling or the user is still aiming, so start the count over.
+      if (stableCodeRef.current === data) {
+        stableCountRef.current += 1;
+      } else {
+        stableCodeRef.current = data;
+        stableCountRef.current = 1;
+      }
+      setLiveCode(data);
+
+      if (stableCountRef.current < STABLE_READS) return;
+      stableCountRef.current = 0;
+      stableCodeRef.current = null;
+
+      if (instantScan) {
+        hapticMedium();
+        runDbLookup(data, type);
+      } else {
+        freezeAndConfirm({ data, type });
+      }
     },
-    [barcode?.data, lookingUp, lookup, notFound, runDbLookup]
+    [phaseKind, instantScan, runDbLookup, freezeAndConfirm]
+  );
+
+  /** User tapped one of the highlighted codes on the frozen frame. */
+  const pickCode = useCallback(
+    (code: DetectedCode) => {
+      hapticMedium();
+      cameraRef.current?.resumePreview?.();
+      discardFrame();
+      runDbLookup(code.data, code.type);
+    },
+    [runDbLookup, discardFrame]
   );
 
   const handleAiGuess = async () => {
-    if (!barcode || !canScan) return;
+    if (phase.kind !== 'notfound' || !canScan) return;
+    const { code, type } = phase;
     setAiLooking(true);
     try {
-      const result = await aiGuessProduct(
-        barcode.data,
-        String(barcode.type ?? 'unknown'),
-        currency
-      );
-      setLookup(result);
-      setNotFound(false);
+      const card = await aiGuessProduct(code, type, currency);
+      setPhase({ kind: 'result', card });
+      addScanToHistory(card);
       incrementScanCount();
     } catch (err: any) {
       Alert.alert('Lookup failed', err?.message ?? 'Could not identify this barcode');
@@ -332,15 +509,78 @@ export default function CaptureScreen() {
     }
   };
 
-  const resetBarcode = () => {
-    setBarcode(null);
-    setLookup(null);
-    setNotFound(false);
+  /** Photograph the ingredients panel and transcribe it onto the card. */
+  const captureIngredients = async () => {
+    if (phase.kind !== 'ingredients' || busyRef.current || !cameraRef.current) return;
+    if (!canScan) {
+      router.push('/paywall');
+      return;
+    }
+    const card = phase.card;
+    busyRef.current = true;
+    setReadingIngredients(true);
+    let uri: string | null = null;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.9,
+        skipProcessing: false,
+      });
+      if (!photo?.uri) throw new Error('Could not take the photo');
+      uri = photo.uri;
+
+      const read = await readIngredientsFromPhoto(photo.uri);
+      if (!read.found || !read.ingredients_text.trim()) {
+        Alert.alert(
+          'No ingredients found',
+          read.note?.trim() ||
+            'Could not find an ingredient list in that photo. Try filling the frame with the list.'
+        );
+        setPhase({ kind: 'result', card });
+        return;
+      }
+
+      incrementScanCount();
+      hapticMedium();
+      setPhase({ kind: 'result', card: withPhotographedIngredients(card, read.ingredients_text) });
+      if (read.unreadable_parts && read.note?.trim()) {
+        Alert.alert('Partly readable', read.note.trim());
+      }
+    } catch (err: any) {
+      Alert.alert('Could not read the pack', err?.message ?? 'Please try again.');
+      setPhase({ kind: 'result', card });
+    } finally {
+      if (uri) FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+      busyRef.current = false;
+      setReadingIngredients(false);
+    }
   };
+
+  const showAlternatives = async () => {
+    if (phase.kind !== 'result') return;
+    setLoadingAlternatives(true);
+    try {
+      setAlternatives(await findAlternatives(phase.card));
+    } catch {
+      setAlternatives([]);
+    } finally {
+      setLoadingAlternatives(false);
+    }
+  };
+
+  /** Back to hunting, with the frozen still cleaned up. */
+  const resetBarcode = useCallback(() => {
+    cameraRef.current?.resumePreview?.();
+    discardFrame();
+    stableCodeRef.current = null;
+    stableCountRef.current = 0;
+    setLiveCode(null);
+    setAlternatives(null);
+    setPhase({ kind: 'hunting' });
+  }, [discardFrame]);
 
   /** Manual entry that keeps the scanned barcode attached to the receipt. */
   const manualWithBarcode = () => {
-    if (!barcode) return;
+    if (phase.kind !== 'notfound') return;
     router.push({
       pathname: '/review/[id]',
       params: {
@@ -354,7 +594,7 @@ export default function CaptureScreen() {
           tax: 0,
           total: 0,
           payment_method: null,
-          invoice_number: barcode.data,
+          invoice_number: phase.code,
           suggested_category: 'Other',
         }),
       },
@@ -362,26 +602,15 @@ export default function CaptureScreen() {
   };
 
   const useLookupResult = () => {
-    if (!lookup || !barcode) return;
+    if (phase.kind !== 'result') return;
     router.replace({
       pathname: '/review/[id]',
       params: {
         id: 'new',
-        extraction: JSON.stringify(lookupToExtraction(lookup, barcode.data, currency)),
+        extraction: JSON.stringify(cardToExtraction(phase.card, currency)),
       },
     });
   };
-
-  // Only trust the camera's own barcode bounds when they actually look like
-  // view coordinates — some Android devices report them in image space.
-  const barcodeBox = (() => {
-    const b = barcode?.bounds;
-    if (!b?.size?.width || !b?.origin) return null;
-    const { x, y } = b.origin;
-    const { width, height } = b.size;
-    if (x < -20 || y < -20 || x + width > winW * 1.1 || y + height > winH * 1.1) return null;
-    return { x, y, width, height };
-  })();
 
   // Permission loading
   if (!permission) {
@@ -445,16 +674,43 @@ export default function CaptureScreen() {
         />
       )}
 
-      <ScannerOverlay
-        mode={mode}
-        detection={detection}
-        detecting={detecting}
-        aiAssist={aiAssist}
-        aiSuspended={aiSuspended}
-        sourceAspect={sourceAspect}
-        barcodeValue={barcode?.data ?? null}
-        barcodeBox={barcodeBox}
-      />
+      {/* The viewfinder overlay only makes sense while we are still hunting;
+          once the frame is frozen the picker owns the screen. */}
+      {phase.kind === 'hunting' && (
+        <ScannerOverlay
+          mode={mode}
+          detection={detection}
+          detecting={detecting}
+          aiAssist={aiAssist}
+          aiSuspended={aiSuspended}
+          sourceAspect={sourceAspect}
+          barcodeValue={liveCode}
+          barcodeBox={null}
+        />
+      )}
+
+      {/* Frozen frame + tappable barcodes */}
+      {mode === 'barcode' && phase.kind === 'confirming' && (
+        <BarcodePicker
+          frame={phase.frame}
+          viewWidth={winW}
+          viewHeight={winH}
+          onPick={pickCode}
+          onCancel={resetBarcode}
+        />
+      )}
+
+      {/* Aiming at an ingredients panel */}
+      {mode === 'barcode' && phase.kind === 'ingredients' && (
+        <View style={styles.ingredientsOverlay} pointerEvents="none">
+          <View style={styles.ingredientsHint}>
+            <MaterialCommunityIcons name="text-recognition" size={18} color="#f59e0b" />
+            <Text style={styles.ingredientsHintText}>
+              Fill the frame with the ingredients list, then tap the shutter
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
@@ -571,7 +827,7 @@ export default function CaptureScreen() {
 
       {/* Bottom stack */}
       <View style={styles.bottomStack}>
-        {!canScan && (
+        {!canScan && mode === 'receipt' && (
           <TouchableOpacity
             style={styles.limitBanner}
             onPress={() => router.push('/paywall')}
@@ -603,106 +859,112 @@ export default function CaptureScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Barcode result card replaces the shutter row in barcode mode */}
-        {mode === 'barcode' && barcode ? (
+        {/* Barcode mode: the card (or its loading / not-found states) replaces
+            the shutter row. Hunting and confirming keep the camera clear. */}
+        {mode === 'barcode' && phase.kind === 'result' ? (
+          <View
+            style={[
+              styles.card,
+              styles.cardTall,
+              { marginBottom: Math.max(24, insets.bottom + 12) },
+            ]}
+          >
+            <TouchableOpacity style={styles.cardClose} onPress={resetBarcode} hitSlop={12}>
+              <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+            <ProductCardView
+              card={phase.card}
+              currency={currency}
+              userFlags={dietaryFlags}
+              scansLeft={isPro ? null : Math.max(0, FREE_SCAN_LIMIT - scansUsedThisMonth)}
+              onUse={useLookupResult}
+              onScanAnother={resetBarcode}
+              onReadIngredientsFromPack={() => {
+                hapticLight();
+                cameraRef.current?.resumePreview?.();
+                setPhase({ kind: 'ingredients', card: phase.card });
+              }}
+              readingIngredients={readingIngredients}
+              onShowAlternatives={showAlternatives}
+              alternatives={alternatives}
+              loadingAlternatives={loadingAlternatives}
+            />
+          </View>
+        ) : mode === 'barcode' && phase.kind === 'looking' ? (
           <View style={[styles.card, { marginBottom: Math.max(24, insets.bottom + 12) }]}>
             <View style={styles.cardHeader}>
               <MaterialCommunityIcons name="barcode" size={18} color="#f59e0b" />
               <Text style={styles.cardCode} numberOfLines={1}>
-                {barcode.data}
+                {phase.code}
               </Text>
               <TouchableOpacity onPress={resetBarcode} hitSlop={10}>
                 <MaterialCommunityIcons name="close" size={18} color="rgba(255,255,255,0.6)" />
               </TouchableOpacity>
             </View>
-
-            {lookup ? (
-              <>
-                <Text style={styles.cardTitle}>
-                  {lookup.product_name?.trim() || 'Not identified'}
-                </Text>
-                {!!lookup.brand?.trim() && <Text style={styles.cardSub}>{lookup.brand}</Text>}
-                <View style={styles.metaRow}>
-                  <View style={styles.metaChip}>
-                    <Text style={styles.metaChipText}>
-                      {lookup.fromCache
-                        ? `${SOURCE_LABEL[lookup.source]} · saved on this phone`
-                        : SOURCE_LABEL[lookup.source]}
-                    </Text>
-                  </View>
-                  {lookup.source === 'ai' && (
-                    <View style={styles.metaChip}>
-                      <Text style={styles.metaChipText}>
-                        {Math.round(lookup.confidence * 100)}% confident
-                      </Text>
-                    </View>
-                  )}
-                  {lookup.estimated_price > 0 && (
-                    <View style={styles.metaChip}>
-                      <Text style={styles.metaChipText}>
-                        ~{currency} {lookup.estimated_price.toFixed(2)}
-                      </Text>
-                    </View>
-                  )}
-                  {!!lookup.country?.trim() && (
-                    <View style={styles.metaChip}>
-                      <Text style={styles.metaChipText}>{lookup.country}</Text>
-                    </View>
-                  )}
-                </View>
-                {!!lookup.note?.trim() && <Text style={styles.cardNote}>{lookup.note}</Text>}
-                {isOpenFactsSource(lookup.source) && (
-                  <Text style={styles.attribution}>{OPEN_FACTS_ATTRIBUTION}</Text>
-                )}
-                <TouchableOpacity style={styles.primaryBtn} onPress={useLookupResult}>
-                  <Text style={styles.primaryBtnText}>Use these details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryBtn} onPress={resetBarcode}>
-                  <Text style={styles.secondaryBtnText}>Scan another</Text>
-                </TouchableOpacity>
-              </>
-            ) : notFound ? (
-              <>
-                <Text style={styles.cardTitle}>Not in any database yet</Text>
-                <Text style={styles.cardNote}>
-                  We checked the free worldwide product databases. Ask the AI for a
-                  best guess, or type the details yourself — the barcode stays saved
-                  either way.
-                </Text>
-                <TouchableOpacity
-                  style={[styles.primaryBtn, (!canScan || aiLooking) && styles.btnDisabled]}
-                  onPress={handleAiGuess}
-                  disabled={!canScan || aiLooking}
-                >
-                  {aiLooking ? (
-                    <ActivityIndicator size="small" color="#000" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Ask AI for a guess</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryBtn} onPress={manualWithBarcode}>
-                  <Text style={styles.secondaryBtnText}>Type details myself</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <Text style={styles.cardNote}>Checking free product databases…</Text>
-                <ActivityIndicator
-                  size="small"
-                  color="rgba(255,255,255,0.8)"
-                  style={{ marginVertical: 10 }}
-                />
-              </>
-            )}
+            <Text style={styles.cardNote}>Checking free product databases…</Text>
+            <ActivityIndicator
+              size="small"
+              color="rgba(255,255,255,0.8)"
+              style={{ marginVertical: 10 }}
+            />
           </View>
-        ) : (
+        ) : mode === 'barcode' && phase.kind === 'notfound' ? (
+          <View style={[styles.card, { marginBottom: Math.max(24, insets.bottom + 12) }]}>
+            <View style={styles.cardHeader}>
+              <MaterialCommunityIcons name="barcode" size={18} color="#f59e0b" />
+              <Text style={styles.cardCode} numberOfLines={1}>
+                {phase.code}
+              </Text>
+              <TouchableOpacity onPress={resetBarcode} hitSlop={10}>
+                <MaterialCommunityIcons name="close" size={18} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.cardTitle}>
+              {phase.incomplete ? "Couldn't check every database" : 'Not in any database yet'}
+            </Text>
+            <Text style={styles.cardNote}>
+              {phase.incomplete
+                ? 'We hit the free databases\u2019 rate limit, so this might still be findable in a minute. Try again shortly, or carry on below.'
+                : !isRetailBarcode(phase.code, phase.type)
+                  ? 'That is not a retail product barcode, so no product database will list it. You can still ask the AI or type the details in.'
+                  : 'We checked the free worldwide product databases. Ask the AI for a best guess, or type the details yourself \u2014 the barcode stays saved either way.'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, (!canScan || aiLooking) && styles.btnDisabled]}
+              onPress={handleAiGuess}
+              disabled={!canScan || aiLooking}
+            >
+              {aiLooking ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Ask AI for a guess</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={manualWithBarcode}>
+              <Text style={styles.secondaryBtnText}>Type details myself</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={resetBarcode}>
+              <Text style={styles.secondaryBtnText}>Scan another</Text>
+            </TouchableOpacity>
+          </View>
+        ) : mode === 'barcode' && phase.kind === 'confirming' ? null : (
           <View
             style={[styles.bottomBar, { paddingBottom: Math.max(36, 18 + insets.bottom) }]}
           >
-            <TouchableOpacity style={styles.sideBtn} onPress={handleGallery} disabled={!canScan}>
-              <MaterialCommunityIcons name="image-multiple" size={26} color="white" />
-              <Text style={styles.sideBtnLabel}>Gallery</Text>
-            </TouchableOpacity>
+            {phase.kind === 'ingredients' ? (
+              <TouchableOpacity
+                style={styles.sideBtn}
+                onPress={() => setPhase({ kind: 'result', card: phase.card })}
+              >
+                <MaterialCommunityIcons name="arrow-left" size={26} color="white" />
+                <Text style={styles.sideBtnLabel}>Back</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.sideBtn} onPress={handleGallery} disabled={!canScan}>
+                <MaterialCommunityIcons name="image-multiple" size={26} color="white" />
+                <Text style={styles.sideBtnLabel}>Gallery</Text>
+              </TouchableOpacity>
+            )}
 
             {mode === 'receipt' ? (
               <TouchableOpacity
@@ -721,10 +983,27 @@ export default function CaptureScreen() {
                   />
                 </View>
               </TouchableOpacity>
+            ) : phase.kind === 'ingredients' ? (
+              <TouchableOpacity
+                style={[styles.shutter, readingIngredients && styles.shutterDisabled]}
+                onPress={captureIngredients}
+                disabled={readingIngredients}
+                activeOpacity={0.8}
+              >
+                <View style={styles.shutterRing}>
+                  {readingIngredients ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <View style={styles.shutterInner} />
+                  )}
+                </View>
+              </TouchableOpacity>
             ) : (
               <View style={styles.scanHintWrap}>
                 <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
-                <Text style={styles.scanHint}>Scanning for barcodes…</Text>
+                <Text style={styles.scanHint}>
+                  {liveCode ? 'Hold steady…' : 'Scanning for barcodes…'}
+                </Text>
               </View>
             )}
 
@@ -910,6 +1189,28 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     gap: 6,
   },
+  // The full product card needs room; capped so the viewfinder stays visible
+  // above it and the user can see they are still pointing at something.
+  cardTall: { maxHeight: '78%', paddingTop: 30 },
+  cardClose: { position: 'absolute', top: 8, right: 10, zIndex: 2, padding: 4 },
+
+  ingredientsOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-start' },
+  ingredientsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    marginTop: 120,
+    marginHorizontal: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(245,158,11,0.5)',
+  },
+  ingredientsHintText: { color: 'white', fontSize: 12.5, flexShrink: 1, lineHeight: 17 },
+
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardCode: {
     flex: 1,

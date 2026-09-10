@@ -235,6 +235,45 @@ export function isRetailBarcode(rawCode: string, barcodeType: string): boolean {
   return canonicalBarcode(rawCode, barcodeType) !== null;
 }
 
+/**
+ * ML Kit's numeric barcode formats.
+ *
+ * Needed because expo-camera is inconsistent about `type` on Android: the live
+ * `onBarcodeScanned` callback runs it through `BarcodeType.mapFormatToString`
+ * and yields "ean13", while `scanFromURLAsync` serialises the raw ML Kit
+ * constant with `putInt("type", ...)` and yields 32 — even though both are
+ * typed as `string` in expo-camera's own definitions.
+ *
+ * Left unhandled, a code picked off the frozen confirmation frame would arrive
+ * with type "32", which fails every `type.includes('upc_e')` test and so would
+ * silently skip UPC-E expansion. Normalising here means the rest of the app
+ * only ever deals in the string form.
+ */
+const MLKIT_FORMATS: Record<number, string> = {
+  1: 'code128',
+  2: 'code39',
+  4: 'code93',
+  8: 'codabar',
+  16: 'datamatrix',
+  32: 'ean13',
+  64: 'ean8',
+  128: 'itf14',
+  256: 'qr',
+  512: 'upc_a',
+  1024: 'upc_e',
+  2048: 'pdf417',
+  4096: 'aztec',
+};
+
+export function normaliseBarcodeType(type: unknown): string {
+  if (typeof type === 'number') return MLKIT_FORMATS[type] ?? 'unknown';
+  const s = String(type ?? '').trim();
+  if (!s) return 'unknown';
+  // A numeric string is the same constant that survived a JSON round-trip.
+  if (/^\d+$/.test(s)) return MLKIT_FORMATS[Number(s)] ?? 'unknown';
+  return s.toLowerCase();
+}
+
 /* ------------------------------------------------------------------ *
  * Open *Facts
  * ------------------------------------------------------------------ */

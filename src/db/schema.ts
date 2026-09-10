@@ -53,7 +53,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_feedback_receipt ON extraction_feedback(receipt_id);
 
     -- Barcode lookup cache: one row per successfully identified barcode.
-    -- result holds the full ProductLookupResult JSON; source is duplicated
+    -- result holds the full ProductCard JSON; source is duplicated
     -- as a column purely for debugging / future stats queries.
     CREATE TABLE IF NOT EXISTS barcode_cache (
       barcode TEXT PRIMARY KEY,

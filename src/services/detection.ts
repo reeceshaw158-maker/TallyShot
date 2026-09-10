@@ -252,28 +252,3 @@ export async function cropToBox(
     return uri;
   }
 }
-
-/**
- * Turn a barcode lookup into something the Review screen already understands,
- * so barcode scanning reuses the whole existing edit/save path.
- */
-export function lookupToExtraction(
-  lookup: BarcodeLookup,
-  barcode: string,
-  currency: string
-) {
-  const price = lookup.estimated_price > 0 ? Number(lookup.estimated_price.toFixed(2)) : 0;
-  const name = lookup.product_name?.trim() || 'Unknown product';
-  return {
-    merchant: lookup.brand?.trim() || '',
-    date: new Date().toISOString().slice(0, 10),
-    currency,
-    line_items: [{ description: name, quantity: 1, unit_price: price, total: price }],
-    subtotal: price,
-    tax: 0,
-    total: price,
-    payment_method: null,
-    invoice_number: barcode,
-    suggested_category: lookup.suggested_category,
-  };
-}

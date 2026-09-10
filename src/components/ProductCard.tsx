@@ -103,8 +103,8 @@ export default function ProductCardView({
     [userFlags, card.allergensTags, card.tracesTags, card.ingredientsText]
   );
   const guidance = useMemo(
-    () => guidanceLine({ flags, rows, novaGroup: card.novaGroup, isDrink }),
-    [flags, rows, card.novaGroup, isDrink]
+    () => guidanceLine({ flags, rows, novaGroup: card.novaGroup }),
+    [flags, rows, card.novaGroup]
   );
 
   const grade = nutriScoreGrade(card.nutriscoreGrade);
@@ -466,7 +466,11 @@ export default function ProductCardView({
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: '100%' },
+  // No height of its own: the card wrapper carries a maxHeight in pixels, and
+  // flexShrink lets this collapse into whatever that leaves rather than
+  // pushing the wrapper past it. A percentage height here would resolve
+  // against a parent whose own height is content-driven, i.e. against nothing.
+  scroll: { flexShrink: 1 },
   scrollContent: { paddingBottom: 4 },
 
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },

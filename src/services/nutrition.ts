@@ -694,7 +694,6 @@ export function guidanceLine(opts: {
   flags: FlagMatch[];
   rows: NutrientRow[];
   novaGroup?: number | null;
-  isDrink?: boolean;
 }): string | null {
   const { flags, rows, novaGroup } = opts;
 

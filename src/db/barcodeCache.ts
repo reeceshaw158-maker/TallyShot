@@ -1,39 +1,90 @@
 import { getDb } from './schema';
-import type { ProductLookupResult } from '../services/productLookup';
+import type { ProductCard } from '../services/productLookup';
 
 /**
- * On-device cache of successful barcode lookups. Rescanning a product is
- * instant and works offline — and spares the free public APIs repeat calls
- * for the same code, which their usage terms ask nicely for.
+ * On-device cache of barcode lookups. Rescanning a product is instant and
+ * works offline — and spares the free public APIs repeat calls for the same
+ * code, which their usage terms ask nicely for.
  *
  * Cache errors are swallowed everywhere: the cache is an accelerator, and a
  * failed read or write must never break a scan that would otherwise work.
  */
 
-export async function getCachedProduct(barcode: string): Promise<ProductLookupResult | null> {
+/**
+ * How long a recorded *miss* suppresses a repeat lookup.
+ *
+ * Misses are cached because a shopper who scans an unlisted item, backs out
+ * and scans it again shouldn't spend another five requests from a rate budget
+ * capped at 15/min. But Open Food Facts gains thousands of products a day, so
+ * the suppression is deliberately short — a product added this afternoon is
+ * findable by tomorrow morning.
+ */
+const MISS_TTL_HOURS = 6;
+
+/** Sentinel stored in the `source` column for a recorded miss. */
+const MISS_SOURCE = '__miss';
+
+export async function getCachedProduct(barcode: string): Promise<ProductCard | null> {
   try {
     const db = await getDb();
-    const row = await db.getFirstAsync<{ result: string }>(
-      'SELECT result FROM barcode_cache WHERE barcode = ?',
+    const row = await db.getFirstAsync<{ result: string; source: string }>(
+      'SELECT result, source FROM barcode_cache WHERE barcode = ?',
       [barcode]
     );
-    if (!row) return null;
-    return JSON.parse(row.result) as ProductLookupResult;
+    if (!row || row.source === MISS_SOURCE) return null;
+
+    const parsed = JSON.parse(row.result) as ProductCard;
+    // Rows written by an older version of the app have the pre-ProductCard
+    // shape. Rather than migrate them, ignore anything without a name and let
+    // the chain refetch — the cache is disposable by design.
+    if (!parsed || typeof parsed !== 'object' || typeof parsed.name !== 'string') return null;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-export async function cacheProduct(barcode: string, result: ProductLookupResult): Promise<void> {
+export async function cacheProduct(barcode: string, card: ProductCard): Promise<void> {
   try {
     const db = await getDb();
-    const { fromCache: _fromCache, ...stored } = result;
+    const { fromCache: _fromCache, ...stored } = card;
     await db.runAsync(
-      'INSERT OR REPLACE INTO barcode_cache (barcode, source, result) VALUES (?, ?, ?)',
-      [barcode, result.source, JSON.stringify(stored)]
+      `INSERT OR REPLACE INTO barcode_cache (barcode, source, result, created_at)
+       VALUES (?, ?, ?, datetime('now'))`,
+      [barcode, card.source, JSON.stringify(stored)]
     );
   } catch {
     // Best-effort only.
+  }
+}
+
+/** Record that the whole free chain came up empty for this code. */
+export async function cacheMiss(barcode: string): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO barcode_cache (barcode, source, result, created_at)
+       VALUES (?, ?, '{}', datetime('now'))`,
+      [barcode, MISS_SOURCE]
+    );
+  } catch {
+    // Best-effort only.
+  }
+}
+
+/** True when we recorded a miss for this code inside the TTL. */
+export async function wasRecentMiss(barcode: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const row = await db.getFirstAsync<{ fresh: number }>(
+      `SELECT (created_at > datetime('now', ?)) AS fresh
+         FROM barcode_cache
+        WHERE barcode = ? AND source = ?`,
+      [`-${MISS_TTL_HOURS} hours`, barcode, MISS_SOURCE]
+    );
+    return !!row?.fresh;
+  } catch {
+    return false;
   }
 }
 

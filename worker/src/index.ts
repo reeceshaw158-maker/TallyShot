@@ -1,13 +1,16 @@
 /**
  * TallyShot AI Worker.
  *
- * One endpoint, three modes:
+ * One endpoint, four modes:
  *   - `extract` (default) — full receipt → structured JSON. Claude Opus 5.
  *   - `detect`            — find the receipt/barcode in a viewfinder frame and
  *                           return a normalised bounding box. Claude Haiku 4.5
  *                           because it runs every few seconds while the camera
  *                           is open, so it must be fast and cheap.
  *   - `lookup`            — barcode digits → product guess. Claude Opus 5.
+ *   - `ingredients`       — photo of a pack → verbatim ingredient list.
+ *                           Claude Opus 5: small print, and a misread
+ *                           allergen is the worst error the app can make.
  *
  * Every mode uses structured outputs (`output_config.format`), so the model is
  * constrained to valid JSON against a schema. That removes the old
@@ -29,9 +32,10 @@ interface Env {
   EXTRACT_MODEL?: string;
   DETECT_MODEL?: string;
   LOOKUP_MODEL?: string;
+  INGREDIENTS_MODEL?: string;
 }
 
-type Mode = 'extract' | 'detect' | 'lookup';
+type Mode = 'extract' | 'detect' | 'lookup' | 'ingredients';
 
 interface RequestBody {
   mode?: Mode;
@@ -62,11 +66,18 @@ const DEFAULT_MODEL: Record<Mode, string> = {
   extract: 'claude-opus-5',
   detect: 'claude-haiku-4-5',
   lookup: 'claude-opus-5',
+  ingredients: 'claude-opus-5',
 };
 
 function modelFor(mode: Mode, env: Env): string {
   const override =
-    mode === 'extract' ? env.EXTRACT_MODEL : mode === 'detect' ? env.DETECT_MODEL : env.LOOKUP_MODEL;
+    mode === 'extract'
+      ? env.EXTRACT_MODEL
+      : mode === 'detect'
+        ? env.DETECT_MODEL
+        : mode === 'ingredients'
+          ? env.INGREDIENTS_MODEL
+          : env.LOOKUP_MODEL;
   return override?.trim() || DEFAULT_MODEL[mode];
 }
 
@@ -202,6 +213,69 @@ const LOOKUP_SCHEMA = {
   ],
   additionalProperties: false,
 };
+
+/**
+ * Ingredients mode.
+ *
+ * Open Beauty Facts holds names and photos for most cosmetics but almost no
+ * INCI lists — of four real Nivea/L'Oreal products sampled, none had one. So
+ * when the database can't supply the ingredients, the user photographs the
+ * back of the pack and we transcribe it.
+ *
+ * Transcription only. The model is explicitly forbidden from judging the
+ * ingredients; the app's own rules engine decides what to highlight, so the
+ * same neutral wording applies whether the list came from a database or a photo.
+ */
+const INGREDIENTS_SCHEMA = {
+  type: 'object',
+  properties: {
+    found: {
+      type: 'boolean',
+      description: 'True only if an ingredient list is legible in the image.',
+    },
+    kind: {
+      type: 'string',
+      enum: ['food', 'cosmetic', 'unknown'],
+      description:
+        'A food ingredient list, or a cosmetic INCI list (INCI names are Latin/English botanical and chemical names, usually in capitals).',
+    },
+    ingredients_text: {
+      type: 'string',
+      description:
+        'The ingredient list transcribed verbatim, comma-separated, in the order printed. Preserve percentages and bracketed sub-ingredients. Empty string if not legible.',
+    },
+    allergen_emphasis: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        'Ingredients printed in bold, capitals or otherwise emphasised, which is how UK/EU packs mark allergens. Empty array if none or unclear.',
+    },
+    unreadable_parts: {
+      type: 'boolean',
+      description: 'True if any of the list was cut off, blurred or obscured.',
+    },
+    note: {
+      type: 'string',
+      description:
+        'One short factual sentence to the user about legibility, e.g. "Bottom line was cut off". Empty string if the list read cleanly. Never comment on whether ingredients are good or bad.',
+    },
+  },
+  required: ['found', 'kind', 'ingredients_text', 'allergen_emphasis', 'unreadable_parts', 'note'],
+  additionalProperties: false,
+};
+
+const INGREDIENTS_SYSTEM = `You transcribe ingredient lists from photographs of product packaging.
+
+You are given a photo of the back or side of a retail pack. Find the ingredient list and transcribe it exactly.
+
+Rules:
+- Transcribe VERBATIM. Do not correct spelling, expand abbreviations, reorder, translate or summarise. Ingredient order is legally meaningful — it is descending by weight.
+- Cosmetic packs carry an INCI list, usually headed "Ingredients" or "INCI", in Latin/English chemical and botanical names. Food packs carry a food ingredient list. Set "kind" accordingly.
+- UK and EU packs emphasise allergens in bold or CAPITALS. Record those in allergen_emphasis exactly as printed. If the photo cannot show emphasis clearly, leave the array empty rather than guessing.
+- Keep percentages and bracketed sub-ingredients, e.g. "HAZELNUTS 13%", "emulsifier (SOYA lecithin)".
+- If part of the list runs off the edge, is blurred or is hidden by a fold, transcribe what you can, set unreadable_parts=true, and say which part in "note".
+- If there is no ingredient list in the image, set found=false and ingredients_text to an empty string.
+- NEVER assess, rank or comment on the ingredients. You are a transcriber, not an adviser. "note" is only about legibility.`;
 
 const DETECT_SYSTEM = `You locate documents in camera frames for a receipt-scanning app.
 
@@ -341,7 +415,7 @@ export default {
     }
 
     const mode: Mode = body.mode ?? 'extract';
-    if (!['extract', 'detect', 'lookup'].includes(mode)) {
+    if (!['extract', 'detect', 'lookup', 'ingredients'].includes(mode)) {
       return err(`Unknown mode "${mode}"`, 400);
     }
 
@@ -389,7 +463,12 @@ export default {
     }
 
     const isDetect = mode === 'detect';
-    const system = isDetect ? DETECT_SYSTEM : body.system_prompt;
+    const isIngredients = mode === 'ingredients';
+    const system = isDetect
+      ? DETECT_SYSTEM
+      : isIngredients
+        ? INGREDIENTS_SYSTEM
+        : body.system_prompt;
     if (!system) {
       return err('Missing system_prompt', 400);
     }
@@ -398,7 +477,7 @@ export default {
       env.ANTHROPIC_API_KEY,
       {
         model: modelFor(mode, env),
-        max_tokens: isDetect ? 512 : 4096,
+        max_tokens: isDetect ? 512 : isIngredients ? 2048 : 4096,
         system,
         messages: [
           {
@@ -409,7 +488,9 @@ export default {
                 type: 'text',
                 text: isDetect
                   ? 'Locate the document in this frame.'
-                  : 'Extract the receipt data.',
+                  : isIngredients
+                    ? 'Transcribe the ingredient list from this pack.'
+                    : 'Extract the receipt data.',
               },
             ],
           },
@@ -427,7 +508,7 @@ export default {
           ...(isDetect ? {} : { effort: 'medium' }),
           format: {
             type: 'json_schema',
-            schema: isDetect ? DETECT_SCHEMA : EXTRACT_SCHEMA,
+            schema: isDetect ? DETECT_SCHEMA : isIngredients ? INGREDIENTS_SCHEMA : EXTRACT_SCHEMA,
           },
         },
       },

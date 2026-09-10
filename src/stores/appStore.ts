@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules, Platform } from 'react-native';
 import { REGION_PRESETS, Region, TaxMode } from '../types';
+import type { DietaryFlag } from '../services/nutrition';
 
 /**
  * How the receipt detail screen summarises numbers.
@@ -63,6 +64,25 @@ interface AppState {
    * button gives the same result on demand without the timer.
    */
   aiAssist: boolean;
+  /**
+   * What the barcode scanner does the instant it decodes a code.
+   *
+   * `false` (default) — freeze the frame and ask "scan this one?", showing
+   * every barcode it can see so the user picks. This is the fix for the
+   * single most common complaint about competing scanners: grabbing the first
+   * code in view before the user has finished aiming, which on a parcel with
+   * three barcodes means it reliably picks the wrong one.
+   *
+   * `true` — act on the first stable read. Faster for a shelf full of
+   * single-barcode groceries, wrong for anything cluttered, so the safe
+   * behaviour is the default and speed is opt-in.
+   */
+  instantScan: boolean;
+  /**
+   * Ingredients and allergens the user wants highlighted on scan. Purely a
+   * "show me this" list — we match and report, we never advise.
+   */
+  dietaryFlags: DietaryFlag[];
   /** Null when no deletion is in flight. Set by receipt detail + multi-select delete. */
   pendingDeletion: PendingDeletion | null;
 
@@ -81,6 +101,9 @@ interface AppState {
   setSummaryMode: (mode: SummaryMode) => void;
   setPhotoMode: (mode: PhotoMode) => void;
   setAiAssist: (v: boolean) => void;
+  setInstantScan: (v: boolean) => void;
+  toggleDietaryFlag: (flag: DietaryFlag) => void;
+  clearDietaryFlags: () => void;
   setPendingDeletion: (v: PendingDeletion | null) => void;
   setIsPro: (v: boolean) => void;
 }
@@ -138,6 +161,8 @@ export const useAppStore = create<AppState>()(
       summaryMode: 'lineItems',
       photoMode: 'original',
       aiAssist: false,
+      instantScan: false,
+      dietaryFlags: [],
       pendingDeletion: null,
 
       completeOnboarding: () => set({ hasCompletedOnboarding: true }),
@@ -172,6 +197,16 @@ export const useAppStore = create<AppState>()(
       setSummaryMode: (mode) => set({ summaryMode: mode }),
       setPhotoMode: (mode) => set({ photoMode: mode }),
       setAiAssist: (v) => set({ aiAssist: v }),
+      setInstantScan: (v) => set({ instantScan: v }),
+
+      toggleDietaryFlag: (flag) =>
+        set((s) => ({
+          dietaryFlags: s.dietaryFlags.includes(flag)
+            ? s.dietaryFlags.filter((f) => f !== flag)
+            : [...s.dietaryFlags, flag],
+        })),
+
+      clearDietaryFlags: () => set({ dietaryFlags: [] }),
       setPendingDeletion: (v) => set({ pendingDeletion: v }),
       setIsPro: (v) => set({ isPro: v }),
     }),

@@ -140,6 +140,49 @@ export async function detectDocument(imageUri: string): Promise<Detection> {
   };
 }
 
+export const IngredientsReadSchema = z.object({
+  found: z.boolean(),
+  kind: z.enum(['food', 'cosmetic', 'unknown']),
+  ingredients_text: z.string(),
+  allergen_emphasis: z.array(z.string()),
+  unreadable_parts: z.boolean(),
+  note: z.string(),
+});
+
+export type IngredientsRead = z.infer<typeof IngredientsReadSchema>;
+
+/**
+ * Read an ingredient list off a photo of the pack.
+ *
+ * This exists because Open Beauty Facts has names and photos for most
+ * cosmetics but hardly any INCI lists — of four real Nivea/L'Oréal products
+ * sampled during development, none had one. Rather than show an empty
+ * ingredients section on every cream, the user photographs the back of the
+ * pack and we transcribe it.
+ *
+ * Sent at 1280px rather than the 640px used for `detect`: ingredient panels
+ * are small print, and a misread allergen is the worst error this app can
+ * make. The extra bytes are worth it on a one-shot, user-initiated call.
+ */
+export async function readIngredientsFromPhoto(imageUri: string): Promise<IngredientsRead> {
+  const resized = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: 1280 } }],
+    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+  );
+
+  const base64 = await FileSystem.readAsStringAsync(resized.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  FileSystem.deleteAsync(resized.uri, { idempotent: true }).catch(() => {});
+
+  const content = await post(
+    { mode: 'ingredients', image_base64: base64, media_type: 'image/jpeg' },
+    30_000
+  );
+  return IngredientsReadSchema.parse(JSON.parse(content));
+}
+
 /** Identify a scanned barcode. Best-effort — the UI must present it as a guess. */
 export async function lookupBarcode(
   barcode: string,

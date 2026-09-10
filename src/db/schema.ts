@@ -61,6 +61,30 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
       result TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Scan history: one row per scan the user actually confirmed.
+    --
+    -- Deliberately separate from barcode_cache. The cache answers "what is
+    -- this barcode" and is keyed by barcode, so a rescan overwrites; history
+    -- answers "what did I scan and when" and keeps one row per event. Sharing
+    -- one table would mean either losing the cache on a history delete or
+    -- losing history entries on a rescan.
+    CREATE TABLE IF NOT EXISTS scan_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      barcode TEXT NOT NULL,
+      barcode_type TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL DEFAULT '',
+      brand TEXT NOT NULL DEFAULT '',
+      kind TEXT NOT NULL DEFAULT 'other',
+      source TEXT NOT NULL DEFAULT '',
+      image_url TEXT,
+      card TEXT NOT NULL DEFAULT '{}',
+      scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_scan_history_time ON scan_history(scanned_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_scan_history_kind ON scan_history(kind);
+    CREATE INDEX IF NOT EXISTS idx_scan_history_barcode ON scan_history(barcode);
   `);
 
   // Step 2: column-by-column migration for users on older schemas.

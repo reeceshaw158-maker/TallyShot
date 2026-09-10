@@ -276,6 +276,11 @@ export async function clearAllUserData(): Promise<void> {
   } catch {
     // Cache table may not exist on very old installs.
   }
+  try {
+    await db.execAsync('DELETE FROM scan_history;');
+  } catch {
+    // History table may not exist on very old installs.
+  }
   const dir = `${FileSystem.documentDirectory}receipts/`;
   try {
     await FileSystem.deleteAsync(dir, { idempotent: true });

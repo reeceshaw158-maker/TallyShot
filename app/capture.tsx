@@ -407,6 +407,7 @@ export default function CaptureScreen() {
         if (!photo?.uri) throw new Error('no frame');
 
         cameraRef.current.pausePreview?.();
+        discardFrame(); // any previous still, before we take ownership of this one
         frameUriRef.current = photo.uri;
 
         let codes: DetectedCode[] = [];
@@ -455,7 +456,7 @@ export default function CaptureScreen() {
         busyRef.current = false;
       }
     },
-    [runDbLookup]
+    [runDbLookup, discardFrame]
   );
 
   /**
@@ -668,7 +669,9 @@ export default function CaptureScreen() {
         active={isFocused}
         onCameraReady={() => setReady(true)}
         barcodeScannerSettings={{ barcodeTypes: [...BARCODE_TYPES] }}
-        onBarcodeScanned={mode === 'barcode' ? onBarcodeScanned : undefined}
+        onBarcodeScanned={
+          mode === 'barcode' && phase.kind === 'hunting' ? onBarcodeScanned : undefined
+        }
       />
 
       {/* Tapping the viewfinder runs a one-shot AI find — the manual version
@@ -879,7 +882,7 @@ export default function CaptureScreen() {
             style={[
               styles.card,
               styles.cardTall,
-              { marginBottom: Math.max(24, insets.bottom + 12) },
+              { marginBottom: Math.max(24, insets.bottom + 12), maxHeight: winH * 0.72 },
             ]}
           >
             <TouchableOpacity style={styles.cardClose} onPress={resetBarcode} hitSlop={12}>
@@ -1202,9 +1205,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     gap: 6,
   },
-  // The full product card needs room; capped so the viewfinder stays visible
-  // above it and the user can see they are still pointing at something.
-  cardTall: { maxHeight: '78%', paddingTop: 30 },
+  // The full product card needs room, capped so the viewfinder stays visible
+  // above it. The cap is applied inline from the window height: a percentage
+  // would resolve against the absolutely-positioned wrapper, whose own height
+  // is content-driven — i.e. against the very thing it should be constraining.
+  cardTall: { paddingTop: 30 },
   cardClose: { position: 'absolute', top: 8, right: 10, zIndex: 2, padding: 4 },
 
   ingredientsOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-start' },

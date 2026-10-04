@@ -1,0 +1,14 @@
+{
+  "name": "tallyshot-promo-reel",
+  "private": true,
+  "version": "1.0.0",
+  "description": "15s vertical promo reel for TallyShot, rendered to MP4 with Puppeteer + ffmpeg",
+  "scripts": {
+    "render": "node render.js",
+    "render:60": "node render.js --fps 60 --out tallyshot-reel-60fps.mp4"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "puppeteer": "^24.0.0"
+  }
+}

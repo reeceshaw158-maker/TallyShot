@@ -51,8 +51,17 @@ export async function getOfferings() {
 /**
  * Purchase a package. Returns true if Pro is now active.
  * Throws if the user cancels or the purchase fails — catch in the UI.
+ *
+ * Unlike its siblings this one throws rather than returning a default, because
+ * a silent `false` on a purchase attempt is indistinguishable from a declined
+ * card. The unavailable case still has to be a *sentence*, though: without this
+ * guard, tapping subscribe in Expo Go threw
+ * `Cannot read property 'purchasePackage' of null` straight at the user.
  */
 export async function purchasePackage(pkg: PurchasesPackage): Promise<boolean> {
+  if (!Purchases || !RC_KEY) {
+    throw new Error('Purchases are not available in this build. Use the installed app to subscribe.');
+  }
   const { customerInfo } = await Purchases.purchasePackage(pkg);
   return customerInfo.entitlements.active['pro'] !== undefined;
 }

@@ -79,6 +79,18 @@ export interface ProductCard {
   /** % alcohol by volume, when the database records one. */
   abv: number | null;
 
+  /** Producer-claimed certifications, e.g. `en:organic`, `en:vegan`. */
+  labelsTags: string[];
+  /** Open Food Facts' own reading of the ingredient list, e.g. `en:palm-oil`. */
+  ingredientsAnalysisTags: string[];
+  /** Eco-Score a-e, where one has been computed. */
+  ecoscoreGrade: string | null;
+
+  /** Free-text serving as printed, e.g. "30 g (about 3 biscuits)". */
+  servingSize: string;
+  /** Grams or ml in one serving, parsed by Open Food Facts. */
+  servingQuantity: number | null;
+
   source: LookupSource;
   fromCache: boolean;
   /** Only meaningful for `source: 'ai'` — database matches are exact. */
@@ -160,7 +172,29 @@ const searchBudget = new RateBudget(6, 60_000);
  * HTTP
  * ------------------------------------------------------------------ */
 
-async function getJson(url: string, timeoutMs: number): Promise<any | null> {
+/**
+ * Did the last `getJson` fail because the network is unreachable, rather than
+ * because the product genuinely is not there?
+ *
+ * The two are indistinguishable from `null` alone, and conflating them produces
+ * the worst message in the app: telling someone standing in a shop with no
+ * signal that the thing in their hand "isn't in any database". Set by the
+ * transport, read by `findProduct`.
+ */
+let lastWasTransportFailure = false;
+
+export function lastLookupHitNetworkTrouble(): boolean {
+  return lastWasTransportFailure;
+}
+
+/** Sleep helper for the backoff. */
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * One attempt. Resolves to the parsed body, or throws so the caller can decide
+ * whether it is worth trying again.
+ */
+async function getJsonOnce(url: string, timeoutMs: number): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -170,15 +204,47 @@ async function getJson(url: string, timeoutMs: number): Promise<any | null> {
     });
     // A miss arrives as JSON with a 404 status, so parse whatever came back and
     // let the caller judge it. When OFF throttles us it returns an HTML holding
-    // page instead of JSON — .json() throws on that, which lands in the catch
-    // and is treated as a miss. Never an exception out of this function: a
-    // lookup failure must not break a scan.
+    // page instead of JSON — .json() throws on that, which is a real failure
+    // and worth one retry after a pause.
     return await res.json();
-  } catch {
-    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Fetch JSON with one retry and exponential backoff.
+ *
+ * Two attempts, not more: these are free public databases with a per-IP ban
+ * policy, and a scanner that hammers them on every flaky connection is exactly
+ * the client they ban. One retry recovers the common case — a single dropped
+ * packet as the phone hands off between cells — without turning a rate-limit
+ * response into a rate-limit spiral.
+ *
+ * Never throws: a lookup failure must not break a scan.
+ */
+async function getJson(url: string, timeoutMs: number): Promise<any | null> {
+  const ATTEMPTS = 2;
+  const BASE_BACKOFF_MS = 400;
+
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    try {
+      const body = await getJsonOnce(url, timeoutMs);
+      lastWasTransportFailure = false;
+      return body;
+    } catch {
+      const isLastAttempt = attempt === ATTEMPTS - 1;
+      if (isLastAttempt) {
+        lastWasTransportFailure = true;
+        return null;
+      }
+      // 400ms, then 800ms — short enough that the user does not feel it as a
+      // hang, long enough to outlast a handover blip.
+      await wait(BASE_BACKOFF_MS * 2 ** attempt);
+    }
+  }
+
+  return null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -233,6 +299,38 @@ export function canonicalBarcode(rawCode: string, barcodeType: string): string |
 /** True for symbologies that could plausibly be in a product database. */
 export function isRetailBarcode(rawCode: string, barcodeType: string): boolean {
   return canonicalBarcode(rawCode, barcodeType) !== null;
+}
+
+/**
+ * Verify a GTIN's own check digit.
+ *
+ * Only worth running on hand-typed codes. A scanner has already done this — ML
+ * Kit will not hand back a code that fails its own checksum — but a human
+ * copying 13 digits off a pack transposes two of them regularly, and the
+ * checksum catches every single-digit error and most transpositions. Without
+ * it a typo costs a network round trip and comes back as "not in any
+ * database", which reads as "this product doesn't exist" rather than
+ * "you mistyped it".
+ *
+ * Standard GTIN modulo-10: weight the digits right-to-left from the one before
+ * the check digit, alternating x3 and x1, and the check digit is whatever
+ * takes the total to the next multiple of ten.
+ */
+export function hasValidCheckDigit(digits: string): boolean {
+  if (!/^\d+$/.test(digits)) return false;
+  if (![8, 12, 13, 14].includes(digits.length)) return false;
+
+  const body = digits.slice(0, -1);
+  const check = Number(digits[digits.length - 1]);
+
+  let sum = 0;
+  // Right-to-left so the alternation is anchored to the check digit, which is
+  // what makes the same routine work for all four lengths.
+  for (let i = body.length - 1, weight = 3; i >= 0; i--, weight = weight === 3 ? 1 : 3) {
+    sum += Number(body[i]) * weight;
+  }
+
+  return (10 - (sum % 10)) % 10 === check;
 }
 
 /**
@@ -335,6 +433,17 @@ const OFF_FIELDS = [
   'allergens_tags',
   'traces_tags',
   'additives_tags',
+  // Badge sources. `labels_tags` carries certifications a producer has actually
+  // claimed (organic, vegan, halal, cruelty-free); `ingredients_analysis_tags`
+  // is OFF's own derivation from the ingredient list, which is weaker evidence
+  // and is labelled as such on the card.
+  'labels_tags',
+  'ingredients_analysis_tags',
+  'ecoscore_grade',
+  // Per-serving figures. `serving_quantity` is the number OFF parsed out of
+  // the free-text `serving_size`, and is the only one worth doing maths with.
+  'serving_size',
+  'serving_quantity',
 ].join(',');
 
 function titleCase(tag: string): string {
@@ -430,6 +539,11 @@ function emptyCard(barcode: string, barcodeType: string): ProductCard {
     tracesTags: [],
     additivesTags: [],
     abv: null,
+    labelsTags: [],
+    ingredientsAnalysisTags: [],
+    ecoscoreGrade: null,
+    servingSize: '',
+    servingQuantity: null,
     source: 'openfoodfacts',
     fromCache: false,
     confidence: 1,
@@ -502,6 +616,17 @@ async function fetchOpenFacts(
     tracesTags: strArray(p.traces_tags),
     additivesTags: strArray(p.additives_tags),
     abv,
+    labelsTags: strArray(p.labels_tags),
+    ingredientsAnalysisTags: strArray(p.ingredients_analysis_tags),
+    ecoscoreGrade: /^[a-e]$/.test(str(p.ecoscore_grade).toLowerCase())
+      ? str(p.ecoscore_grade).toLowerCase()
+      : null,
+    servingSize: str(p.serving_size),
+    servingQuantity: (() => {
+      const q = Number(p.serving_quantity);
+      // A zero or negative serving would divide the panel into nonsense.
+      return Number.isFinite(q) && q > 0 ? q : null;
+    })(),
     source: src.source,
     suggestedCategory: src.category,
   };
@@ -567,6 +692,13 @@ export interface LookupOutcome {
    * all right now" instead of "not in any database".
    */
   incomplete: boolean;
+  /**
+   * True when every source we tried failed at the transport layer — no signal,
+   * captive portal, airplane mode. Distinct from `incomplete` because the
+   * remedy the user needs is different: not "try again shortly" but "you are
+   * offline".
+   */
+  offline: boolean;
 }
 
 /**
@@ -582,17 +714,19 @@ export async function findProduct(
   const key = cacheKey(rawCode);
 
   const cached = await getCachedProduct(key);
-  if (cached) return { card: { ...cached, fromCache: true }, incomplete: false };
+  if (cached) return { card: { ...cached, fromCache: true }, incomplete: false, offline: false };
 
   const code = canonicalBarcode(rawCode, barcodeType);
   // Not a retail symbology — no product database will have it.
-  if (!code) return { card: null, incomplete: false };
+  if (!code) return { card: null, incomplete: false, offline: false };
 
   // A miss we recorded recently. The databases genuinely do gain thousands of
   // products a day, so this expires quickly rather than being permanent.
-  if (await wasRecentMiss(key)) return { card: null, incomplete: false };
+  if (await wasRecentMiss(key)) return { card: null, incomplete: false, offline: false };
 
   let incomplete = false;
+  /** Every source we actually reached out to came back as a transport error. */
+  let allFailedOnTransport = true;
 
   for (const src of OPEN_FACTS_SOURCES) {
     if (!offBudget.available) {
@@ -602,19 +736,23 @@ export async function findProduct(
     const card = await fetchOpenFacts(src, code, barcodeType);
     if (card) {
       await cacheProduct(key, card);
-      return { card, incomplete: false };
+      return { card, incomplete: false, offline: false };
     }
+    if (!lastLookupHitNetworkTrouble()) allFailedOnTransport = false;
   }
 
   const upc = await fetchUpcItemDb(code, barcodeType);
   if (upc) {
     await cacheProduct(key, upc);
-    return { card: upc, incomplete: false };
+    return { card: upc, incomplete: false, offline: false };
   }
+  if (!lastLookupHitNetworkTrouble()) allFailedOnTransport = false;
 
-  // Only remember a miss when we actually finished the chain.
-  if (!incomplete) await cacheMiss(key);
-  return { card: null, incomplete };
+  // Only remember a miss when we actually finished the chain and the answers we
+  // got were real answers. Caching a miss produced by a dead connection would
+  // keep telling the user "not found" for six hours after they got signal back.
+  if (!incomplete && !allFailedOnTransport) await cacheMiss(key);
+  return { card: null, incomplete, offline: allFailedOnTransport };
 }
 
 /**

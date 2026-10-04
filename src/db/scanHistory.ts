@@ -174,3 +174,22 @@ export async function clearScanHistory(): Promise<void> {
     // Table may not exist yet on a fresh install mid-migration.
   }
 }
+
+/**
+ * One scan by row id, with its full stored card.
+ *
+ * Used by compare mode, which needs the whole `ProductCard` rather than the
+ * summary columns the list renders from. Returns null when the row is gone or
+ * its blob predates the current card shape — the caller says so rather than
+ * comparing half a product.
+ */
+export async function getScanById(id: number): Promise<ScanHistoryEntry | null> {
+  if (!Number.isFinite(id)) return null;
+  try {
+    const db = await getDb();
+    const row = await db.getFirstAsync<Row>('SELECT * FROM scan_history WHERE id = ?', [id]);
+    return row ? toEntry(row) : null;
+  } catch {
+    return null;
+  }
+}

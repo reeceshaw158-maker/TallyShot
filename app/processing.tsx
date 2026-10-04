@@ -217,9 +217,9 @@ export default function ProcessingScreen() {
           >
             <LinearGradient
               colors={[
-                'rgba(129,140,248,0)',
-                'rgba(129,140,248,0.28)',
-                'rgba(199,205,255,0.85)',
+                'rgba(0,200,150,0)',
+                'rgba(0,200,150,0.28)',
+                'rgba(178,255,230,0.85)',
               ]}
               style={styles.scanBeamGradient}
             />

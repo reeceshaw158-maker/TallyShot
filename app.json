@@ -13,7 +13,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#110e38"
+      "backgroundColor": "#06080A"
     },
     "updates": {
       "enabled": true,
@@ -27,16 +27,13 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#110e38"
+        "backgroundColor": "#06080A"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tallyshot.app",
-      "minSdkVersion": 29,
-      "targetSdkVersion": 35,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.INTERNET",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.INTERNET"
       ],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -73,7 +70,17 @@
         }
       ],
       "expo-sharing",
-      "expo-system-ui"
+      "expo-system-ui",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 29
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

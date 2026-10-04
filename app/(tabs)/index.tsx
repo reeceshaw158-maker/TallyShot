@@ -224,7 +224,12 @@ export default function ReceiptsScreen() {
                Select mode: selection count + Cancel + Delete. */}
       {selectMode ? (
         <View style={[styles.header, styles.selectHeader]}>
-          <TouchableOpacity onPress={exitSelectMode} hitSlop={12}>
+          <TouchableOpacity
+            onPress={exitSelectMode}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel selection"
+          >
             <MaterialCommunityIcons name="close" size={24} color={t.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.selectCount, { color: t.textPrimary }]}>
@@ -365,7 +370,7 @@ export default function ReceiptsScreen() {
                 style={[styles.searchInput, { color: t.textPrimary }]}
               />
               {search.length > 0 && (
-                <TouchableOpacity onPress={() => { setSearch(''); if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); setTimeout(load, 0); }} hitSlop={10}>
+                <TouchableOpacity onPress={() => { setSearch(''); if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); setTimeout(load, 0); }} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
                   <MaterialCommunityIcons name="close-circle" size={18} color={t.textSubtle} />
                 </TouchableOpacity>
               )}

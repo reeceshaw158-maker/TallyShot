@@ -437,7 +437,14 @@ export default function SettingsScreen() {
 
       {/* Danger zone */}
       <View style={[styles.dangerCard, { backgroundColor: t.dangerBg, borderColor: t.danger + '55' }]}>
-        <TouchableOpacity onPress={handleDeleteAll} style={styles.dangerRow} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={handleDeleteAll}
+          style={styles.dangerRow}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Delete all data"
+          accessibilityHint="Removes every receipt and scan from this phone"
+        >
           <MaterialCommunityIcons name="delete-forever" size={22} color={t.danger} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.dangerTitle, { color: t.danger }]}>Delete all data</Text>

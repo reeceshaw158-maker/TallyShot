@@ -7,10 +7,10 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
   Animated,
   PanResponder,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ import {
 } from '../src/db/scanHistory';
 import type { ProductKind } from '../src/services/productLookup';
 import { hapticLight, hapticMedium } from '../src/utils/haptics';
+import { SkeletonPulse } from '../src/components/SkeletonPulse';
 
 /**
  * Scan history.
@@ -67,21 +68,34 @@ function SwipeRow({
   tokens,
   onDelete,
   onPress,
+  selectable = false,
+  selected = false,
 }: {
   entry: ScanHistoryEntry;
   tokens: SemanticTokens;
   onDelete: () => void;
   onPress: () => void;
+  /** True while compare mode is picking, which changes what a tap means. */
+  selectable?: boolean;
+  selected?: boolean;
 }) {
   const dx = useRef(new Animated.Value(0)).current;
   const armed = useRef(false);
+  /**
+   * The PanResponder is created once, so it closes over the first render's
+   * props. A ref keeps it reading the live value instead of a stale one.
+   */
+  const selectableRef = useRef(selectable);
+  selectableRef.current = selectable;
 
   const pan = useRef(
     PanResponder.create({
       // Only claim the gesture once it is clearly horizontal, so the list can
       // still be scrolled vertically through the rows.
       onMoveShouldSetPanResponder: (_e, g) =>
-        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
+        !selectableRef.current &&
+        Math.abs(g.dx) > 12 &&
+        Math.abs(g.dx) > Math.abs(g.dy) * 1.6,
       onPanResponderMove: (_e, g) => {
         const next = Math.min(0, g.dx);
         dx.setValue(next);
@@ -117,9 +131,20 @@ function SwipeRow({
       </View>
       <Animated.View style={{ transform: [{ translateX: dx }] }} {...pan.panHandlers}>
         <TouchableOpacity
-          style={[styles.row, { backgroundColor: tokens.surface, borderColor: tokens.border }]}
+          style={[
+            styles.row,
+            { backgroundColor: tokens.surface, borderColor: tokens.border },
+            selected && { borderColor: tokens.accent, borderWidth: 1.5 },
+          ]}
           onPress={onPress}
           activeOpacity={0.75}
+          accessibilityRole={selectable ? 'checkbox' : 'button'}
+          accessibilityState={selectable ? { checked: selected } : undefined}
+          accessibilityLabel={
+            selectable
+              ? `${entry.name || entry.barcode}${selected ? ', selected for comparison' : ''}`
+              : `Open ${entry.name || entry.barcode}`
+          }
         >
           {entry.imageUrl ? (
             <Image source={{ uri: entry.imageUrl }} style={styles.thumb} resizeMode="contain" />
@@ -145,10 +170,82 @@ function SwipeRow({
               {entry.barcode} · {timeAgo(entry.scannedAt)}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={20} color={tokens.textSubtle} />
+          <MaterialCommunityIcons
+            name={
+              selectable
+                ? selected
+                  ? 'checkbox-marked-circle'
+                  : 'checkbox-blank-circle-outline'
+                : 'chevron-right'
+            }
+            size={20}
+            color={selectable && selected ? tokens.accent : tokens.textSubtle}
+          />
         </TouchableOpacity>
       </Animated.View>
     </View>
+  );
+}
+
+/**
+ * Grid cell: the product photo is the hero.
+ *
+ * People remember a scan by what the packet looked like far more reliably than
+ * by its name, so the grid leads with the image and the list leads with text.
+ * No swipe-to-delete here — a swipe gesture on a two-column grid fights the
+ * scroll, so deleting stays a list-view action.
+ */
+function GridCell({
+  entry,
+  tokens,
+  onPress,
+  selectable,
+  selected,
+}: {
+  entry: ScanHistoryEntry;
+  tokens: SemanticTokens;
+  onPress: () => void;
+  selectable: boolean;
+  selected: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.gridCell,
+        { backgroundColor: tokens.surface, borderColor: selected ? tokens.accent : tokens.border },
+        selected && { borderWidth: 1.5 },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole={selectable ? 'checkbox' : 'button'}
+      accessibilityState={selectable ? { checked: selected } : undefined}
+      accessibilityLabel={entry.name || entry.barcode}
+    >
+      <View style={[styles.gridImageWrap, { backgroundColor: tokens.surfaceElevated }]}>
+        {entry.imageUrl ? (
+          <Image source={{ uri: entry.imageUrl }} style={styles.gridImage} resizeMode="contain" />
+        ) : (
+          <MaterialCommunityIcons name="barcode" size={28} color={tokens.textSubtle} />
+        )}
+        {selectable && (
+          <View style={[styles.gridCheck, { backgroundColor: tokens.background }]}>
+            <MaterialCommunityIcons
+              name={selected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+              size={19}
+              color={selected ? tokens.accent : tokens.textSubtle}
+            />
+          </View>
+        )}
+      </View>
+      <Text style={[styles.gridTitle, { color: tokens.textPrimary }]} numberOfLines={2}>
+        {entry.name || entry.barcode}
+      </Text>
+      {!!entry.brand && (
+        <Text style={[styles.gridBrand, { color: tokens.textMuted }]} numberOfLines={1}>
+          {entry.brand}
+        </Text>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -160,6 +257,19 @@ export default function ScanHistoryScreen() {
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<ProductKind | 'all'>('all');
   const [loading, setLoading] = useState(true);
+  /** Pull-to-refresh, tracked separately so it doesn't swap in skeleton rows. */
+  const [refreshing, setRefreshing] = useState(false);
+
+  /**
+   * Compare mode. Null when off; otherwise the ids picked so far.
+   *
+   * Two is the whole feature — a third column does not fit on a phone and a
+   * three-way comparison is a spreadsheet, not a shopping decision. Picking a
+   * third therefore replaces the older of the two rather than being refused,
+   * which is what people actually mean by tapping it.
+   */
+  const [picking, setPicking] = useState<number[] | null>(null);
+  const [view, setView] = useState<'list' | 'grid'>('list');
 
   /** Rows removed from the list but not yet committed, for undo. */
   const [pending, setPending] = useState<ScanHistoryEntry | null>(null);
@@ -191,6 +301,15 @@ export default function ScanHistoryScreen() {
     undoTimer.current = setTimeout(() => setPending(null), 5000);
   };
 
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [load]);
+
   const undo = async () => {
     if (!pending) return;
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -198,6 +317,27 @@ export default function ScanHistoryScreen() {
     setPending(null);
     load();
   };
+
+  const togglePick = (id: number) => {
+    hapticLight();
+    setPicking((current) => {
+      const list = current ?? [];
+      if (list.includes(id)) return list.filter((x) => x !== id);
+      const next = [...list, id];
+      // Keep the two most recent picks.
+      return next.slice(-2);
+    });
+  };
+
+  // Two chosen — go, and leave compare mode behind so coming back is a clean
+  // list rather than a half-finished selection.
+  useEffect(() => {
+    if (picking && picking.length === 2) {
+      const [a, b] = picking;
+      setPicking(null);
+      router.push({ pathname: '/compare', params: { a: String(a), b: String(b) } });
+    }
+  }, [picking]);
 
   const confirmClear = () => {
     Alert.alert(
@@ -224,9 +364,51 @@ export default function ScanHistoryScreen() {
           title: 'Scan history',
           headerRight: () =>
             entries.length > 0 ? (
-              <TouchableOpacity onPress={confirmClear} hitSlop={10}>
-                <MaterialCommunityIcons name="delete-sweep-outline" size={22} color={t.danger} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticLight();
+                    setView((v) => (v === 'list' ? 'grid' : 'list'));
+                  }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    view === 'list' ? 'Switch to grid view' : 'Switch to list view'
+                  }
+                >
+                  <MaterialCommunityIcons
+                    name={view === 'list' ? 'view-grid-outline' : 'view-list-outline'}
+                    size={22}
+                    color={t.textMuted}
+                  />
+                </TouchableOpacity>
+                {entries.length > 1 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticLight();
+                      setPicking((p) => (p === null ? [] : null));
+                    }}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={picking === null ? 'Compare two products' : 'Cancel comparing'}
+                    accessibilityState={{ selected: picking !== null }}
+                  >
+                    <MaterialCommunityIcons
+                      name={picking === null ? 'scale-balance' : 'close'}
+                      size={22}
+                      color={picking === null ? t.accent : t.textMuted}
+                    />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={confirmClear}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear scan history"
+                >
+                  <MaterialCommunityIcons name="delete-sweep-outline" size={22} color={t.danger} />
+                </TouchableOpacity>
+              </View>
             ) : null,
         }}
       />
@@ -291,12 +473,53 @@ export default function ScanHistoryScreen() {
       />
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={t.accent} />
+        /* Skeleton rows rather than a spinner: the list's shape is known before
+           the query resolves, so showing it costs nothing and stops the screen
+           jumping from "centred spinner" to "list" on every open. */
+        <View style={{ paddingTop: 4, gap: 8, paddingHorizontal: 16 }}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <View
+              key={i}
+              style={[styles.row, { backgroundColor: t.surface, borderColor: t.border }]}
+            >
+              <SkeletonPulse
+                style={[styles.thumb, { backgroundColor: t.surfaceElevated }]}
+              />
+              <View style={{ flex: 1, gap: 7 }}>
+                <SkeletonPulse
+                  style={{
+                    height: 13,
+                    width: `${70 - (i % 3) * 12}%`,
+                    borderRadius: 6,
+                    backgroundColor: t.surfaceElevated,
+                  }}
+                />
+                <SkeletonPulse
+                  style={{
+                    height: 10,
+                    width: `${45 - (i % 2) * 10}%`,
+                    borderRadius: 5,
+                    backgroundColor: t.surfaceElevated,
+                  }}
+                />
+              </View>
+            </View>
+          ))}
+        </View>
       ) : (
         <FlatList
           data={entries}
           keyExtractor={(e) => String(e.id)}
           contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingTop: 4 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={refresh}
+              tintColor={t.accent}
+              colors={[t.accent]}
+              progressBackgroundColor={t.surface}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <MaterialCommunityIcons
@@ -323,14 +546,37 @@ export default function ScanHistoryScreen() {
               )}
             </View>
           }
-          renderItem={({ item }) => (
-            <SwipeRow
-              entry={item}
-              tokens={t}
-              onDelete={() => remove(item)}
-              onPress={() => router.push({ pathname: '/capture', params: { rescan: item.barcode } })}
-            />
-          )}
+          // Remounting the rows on a view change is the point — the two
+          // renderers have different layouts, and FlatList reuses cells by
+          // index otherwise.
+          key={view}
+          numColumns={view === 'grid' ? 2 : 1}
+          columnWrapperStyle={view === 'grid' ? styles.gridRow : undefined}
+          renderItem={({ item }) => {
+            const onPress = () =>
+              picking !== null
+                ? togglePick(item.id)
+                : router.push({ pathname: '/capture', params: { rescan: item.barcode } });
+
+            return view === 'grid' ? (
+              <GridCell
+                entry={item}
+                tokens={t}
+                onPress={onPress}
+                selectable={picking !== null}
+                selected={!!picking?.includes(item.id)}
+              />
+            ) : (
+              <SwipeRow
+                entry={item}
+                tokens={t}
+                selectable={picking !== null}
+                selected={!!picking?.includes(item.id)}
+                onDelete={() => remove(item)}
+                onPress={onPress}
+              />
+            );
+          }}
         />
       )}
 
@@ -394,6 +640,35 @@ const styles = StyleSheet.create({
     paddingRight: 20,
   },
   deleteBackingText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  gridRow: { gap: 10, paddingHorizontal: 16 },
+  gridCell: {
+    flex: 1,
+    maxWidth: '48.5%',
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+    marginBottom: 10,
+  },
+  gridImageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  gridImage: { width: '100%', height: '100%' },
+  gridCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    borderRadius: 11,
+    padding: 1,
+  },
+  gridTitle: { fontSize: 13, fontWeight: '600', lineHeight: 17 },
+  gridBrand: { fontSize: 11.5 },
 
   row: {
     flexDirection: 'row',

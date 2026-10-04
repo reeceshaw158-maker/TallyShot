@@ -14,10 +14,10 @@ from PIL import Image, ImageDraw
 import os
 
 # ── Brand palette ──────────────────────────────────────────────────────────
-# Primary accent — the blue-violet that makes TallyShot stand out
-INDIGO        = (99, 102, 241)    # #6366f1  vibrant indigo
-INDIGO_DEEP   = (79, 70, 229)     # #4f46e5  slightly deeper, used for lines
-INDIGO_BG     = (17, 14, 56)      # #110e38  near-black indigo bg
+# Primary accent — brand teal, matches the promo reel (marketing/promo-reel)
+INDIGO        = (0, 200, 150)     # #00C896  brand teal (name kept for diff size)
+INDIGO_DEEP   = (0, 143, 107)     # #008F6B  deeper teal, used for lines
+INDIGO_BG     = (6, 8, 10)        # #06080A  near-black bg
 WHITE         = (255, 255, 255)
 TRANSPARENT   = (0, 0, 0, 0)
 
@@ -136,7 +136,7 @@ print("OK  assets/icon.png")
 
 # ══════════════════════════════════════════════════════════════════════════
 # 2. adaptive-icon.png — 1024x1024, TRANSPARENT background
-#    Android composites #110e38 behind this layer.
+#    Android composites #06080A behind this layer.
 #    Keep logo within the inner 72% safe zone.
 # ══════════════════════════════════════════════════════════════════════════
 img_adaptive = Image.new("RGBA", (SIZE, SIZE), TRANSPARENT)
@@ -147,7 +147,7 @@ print("OK  assets/adaptive-icon.png")
 
 # ══════════════════════════════════════════════════════════════════════════
 # 3. splash-icon.png — 400x400 transparent logo
-#    Expo centres this on splash.backgroundColor = #110e38
+#    Expo centres this on splash.backgroundColor = #06080A
 # ══════════════════════════════════════════════════════════════════════════
 SP = 400
 img_splash = Image.new("RGBA", (SP, SP), TRANSPARENT)

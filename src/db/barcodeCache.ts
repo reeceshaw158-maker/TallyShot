@@ -38,7 +38,19 @@ export async function getCachedProduct(barcode: string): Promise<ProductCard | n
     // shape. Rather than migrate them, ignore anything without a name and let
     // the chain refetch — the cache is disposable by design.
     if (!parsed || typeof parsed !== 'object' || typeof parsed.name !== 'string') return null;
-    return parsed;
+
+    // Fields added after this row may have been written are backfilled rather
+    // than treated as a bad row: a cache hit that renders without its badges is
+    // a far better outcome than throwing away a valid offline result. The array
+    // fields in particular are mapped over unguarded by the card.
+    return {
+      ...parsed,
+      labelsTags: parsed.labelsTags ?? [],
+      ingredientsAnalysisTags: parsed.ingredientsAnalysisTags ?? [],
+      ecoscoreGrade: parsed.ecoscoreGrade ?? null,
+      servingSize: parsed.servingSize ?? '',
+      servingQuantity: parsed.servingQuantity ?? null,
+    };
   } catch {
     return null;
   }

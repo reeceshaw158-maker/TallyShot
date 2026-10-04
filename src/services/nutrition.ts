@@ -737,3 +737,211 @@ export function guidanceLine(opts: {
 
 /** Fixed footer. Shown on every product card, no exceptions. */
 export const NOT_ADVICE_FOOTER = 'Not medical or dietary advice. Always check the pack.';
+
+/* ------------------------------------------------------------------ *
+ * Diet, certification and eco badges
+ * ------------------------------------------------------------------ */
+
+/**
+ * A badge on the product card.
+ *
+ * `certainty` is the point of this type. Open Food Facts carries two very
+ * different kinds of claim and they must not be shown as if they were the same
+ * thing:
+ *
+ *   - `declared` — the producer has claimed the certification and it is in
+ *     `labels_tags`. This is what is printed on the pack.
+ *   - `derived`  — OFF worked it out by reading the ingredient list
+ *     (`ingredients_analysis_tags`). Useful, frequently right, and absolutely
+ *     not something to put in front of someone with an allergy as fact.
+ *
+ * Anyone avoiding an ingredient for medical or religious reasons needs to know
+ * which of the two they are looking at, so `derived` badges render quieter and
+ * carry a "from the ingredients" note.
+ */
+export type BadgeCertainty = 'declared' | 'derived';
+export type BadgeTone = 'good' | 'neutral' | 'watch';
+
+export interface ProductBadge {
+  key: string;
+  label: string;
+  icon: string;
+  tone: BadgeTone;
+  certainty: BadgeCertainty;
+}
+
+/** Tag matching is prefix-based because OFF prefixes by language (`en:`, `fr:`). */
+function hasTag(tags: string[], ...needles: string[]): boolean {
+  return tags.some((raw) => {
+    const tag = raw.toLowerCase().replace(/^[a-z]{2}:/, '');
+    return needles.some((n) => tag === n);
+  });
+}
+
+/**
+ * Certifications a producer has actively claimed. Never inferred.
+ *
+ * Ordered by how often the claim is the reason someone picked the product up.
+ */
+const LABEL_BADGES: { key: string; label: string; icon: string; tags: string[] }[] = [
+  { key: 'organic', label: 'Organic', icon: 'sprout', tags: ['organic', 'eu-organic', 'ab-agriculture-biologique', 'usda-organic'] },
+  { key: 'vegan', label: 'Vegan', icon: 'leaf', tags: ['vegan'] },
+  { key: 'vegetarian', label: 'Vegetarian', icon: 'food-apple-outline', tags: ['vegetarian'] },
+  { key: 'gluten-free', label: 'Gluten free', icon: 'barley-off', tags: ['gluten-free', 'no-gluten'] },
+  { key: 'halal', label: 'Halal', icon: 'check-decagram-outline', tags: ['halal'] },
+  { key: 'kosher', label: 'Kosher', icon: 'check-decagram-outline', tags: ['kosher'] },
+  { key: 'cruelty-free', label: 'Cruelty free', icon: 'rabbit', tags: ['cruelty-free', 'not-tested-on-animals', 'leaping-bunny'] },
+  { key: 'fairtrade', label: 'Fairtrade', icon: 'handshake-outline', tags: ['fairtrade', 'fair-trade', 'max-havelaar'] },
+  { key: 'palm-oil-free', label: 'No palm oil', icon: 'palm-tree', tags: ['palm-oil-free', 'no-palm-oil', 'without-palm-oil'] },
+];
+
+/**
+ * Build the badge row for a product.
+ *
+ * Declared beats derived: if a producer has claimed "vegan" there is no reason
+ * to also show OFF's reading of the ingredient list, and showing both reads as
+ * two separate findings rather than one fact.
+ */
+export function deriveBadges(opts: {
+  labelsTags: string[];
+  ingredientsAnalysisTags: string[];
+}): ProductBadge[] {
+  const labels = opts.labelsTags ?? [];
+  const analysis = opts.ingredientsAnalysisTags ?? [];
+  const badges: ProductBadge[] = [];
+  const claimed = new Set<string>();
+
+  for (const def of LABEL_BADGES) {
+    if (hasTag(labels, ...def.tags)) {
+      badges.push({
+        key: def.key,
+        label: def.label,
+        icon: def.icon,
+        tone: 'good',
+        certainty: 'declared',
+      });
+      claimed.add(def.key);
+    }
+  }
+
+  // OFF's own derivation, only where the producer has not already said so.
+  if (!claimed.has('vegan') && hasTag(analysis, 'vegan')) {
+    badges.push({ key: 'vegan', label: 'Vegan', icon: 'leaf', tone: 'good', certainty: 'derived' });
+    claimed.add('vegan');
+  }
+  if (!claimed.has('vegetarian') && !claimed.has('vegan') && hasTag(analysis, 'vegetarian')) {
+    badges.push({
+      key: 'vegetarian',
+      label: 'Vegetarian',
+      icon: 'food-apple-outline',
+      tone: 'good',
+      certainty: 'derived',
+    });
+  }
+
+  // Palm oil is the one badge that is a warning rather than a credential, so it
+  // is stated as a fact about the ingredients and nothing more. "May contain"
+  // is reported at the same weight, because the honest answer there is
+  // "possibly", not silence.
+  if (!claimed.has('palm-oil-free')) {
+    if (hasTag(analysis, 'palm-oil')) {
+      badges.push({
+        key: 'palm-oil',
+        label: 'Contains palm oil',
+        icon: 'palm-tree',
+        tone: 'watch',
+        certainty: 'derived',
+      });
+    } else if (hasTag(analysis, 'may-contain-palm-oil')) {
+      badges.push({
+        key: 'palm-oil-maybe',
+        label: 'May contain palm oil',
+        icon: 'palm-tree',
+        tone: 'watch',
+        certainty: 'derived',
+      });
+    }
+  }
+
+  return badges;
+}
+
+/** Eco-Score uses the same a-e scale and colours as Nutri-Score. */
+export function ecoScoreGrade(grade: string | null | undefined): string | null {
+  const g = String(grade ?? '').toLowerCase();
+  return /^[a-e]$/.test(g) ? g : null;
+}
+
+/**
+ * Energy per UK alcohol unit.
+ *
+ * Pure ethanol is 7 kcal/g at a density of 0.789 g/ml, and a UK unit is 10ml of
+ * it — so a unit carries about 55 kcal before anything else in the drink is
+ * counted. Stated as "from alcohol alone" for exactly that reason: a sweet
+ * cider's real figure is higher and this number must not be read as the total.
+ */
+export const KCAL_PER_UK_UNIT = Math.round(10 * 0.789 * 7);
+
+/* ------------------------------------------------------------------ *
+ * Per-serving figures
+ * ------------------------------------------------------------------ */
+
+export interface ServingRow {
+  key: NutrientKey | 'energy';
+  label: string;
+  /** Already scaled to one serving. Grams, except energy which is kcal. */
+  perServing: number;
+  unit: 'g' | 'kcal';
+}
+
+/**
+ * Scale the per-100 panel to one serving.
+ *
+ * Only ever derived from `serving_quantity` — the number Open Food Facts has
+ * already parsed out of the free-text serving size. Parsing "about 3 biscuits
+ * (30g)" ourselves would be guesswork, and a wrong serving size silently
+ * multiplies every figure on the panel by the wrong amount, which is worse than
+ * showing no serving column at all.
+ *
+ * Returns an empty list when there is no serving to scale to, so the caller
+ * simply renders the per-100 panel alone.
+ */
+export function buildServingRows(
+  nutriments: Record<string, unknown> | null | undefined,
+  servingQuantity: number | null | undefined,
+  isDrink: boolean
+): ServingRow[] {
+  const grams = Number(servingQuantity);
+  if (!nutriments || !Number.isFinite(grams) || grams <= 0) return [];
+
+  const factor = grams / 100;
+  const rows: ServingRow[] = [];
+
+  const kcal = energyKcal(nutriments);
+  if (kcal !== null) {
+    rows.push({
+      key: 'energy',
+      label: 'Energy',
+      perServing: kcal * factor,
+      unit: 'kcal',
+    });
+  }
+
+  for (const row of buildNutrientRows(nutriments, isDrink)) {
+    rows.push({
+      key: row.key,
+      label: row.label,
+      perServing: row.per100 * factor,
+      unit: 'g',
+    });
+  }
+
+  return rows;
+}
+
+/** Serving figures are small numbers; one decimal place unless it is whole. */
+export function formatServing(row: ServingRow): string {
+  const dp = row.unit === 'kcal' ? 0 : 1;
+  const value = Number(row.perServing.toFixed(dp));
+  return `${Number.isInteger(value) ? value : value.toFixed(dp)}${row.unit === 'kcal' ? ' kcal' : 'g'}`;
+}

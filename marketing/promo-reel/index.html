@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TallyShot Promo Reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=block" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+/* ============================================================
+   TallyShot — 15s vertical promo reel (1080x1920, 120 BPM)
+   One accent colour. Change --accent (and ACCENT in the script)
+   to re-skin everything.
+   ============================================================ */
+:root{
+  --accent:#00C896;           /* brand teal (docs/tallyshot-memory/PROJECT.md) */
+  --accent-ink:#03140E;       /* text that sits on the accent */
+  --bg:#06080A;
+  --panel:#0C1112;
+  --panel-2:#111819;
+  --ink:#F2F5F4;
+  --mute:#7A8784;
+  --faint:rgba(255,255,255,.16);
+  --line:rgba(255,255,255,.08);
+  --paper:#ECE9E2;
+  --sans:"Inter Tight","Inter",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+body.render{background:var(--bg)}
+#stage{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;
+  transform-origin:0 0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;text-rendering:geometricPrecision}
+.scene,.cut{position:absolute;inset:0;visibility:hidden}
+.acc{color:var(--accent)}
+.w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .03em .1em;margin:0 -.03em -.1em}
+.w>i{display:inline-block;font-style:normal}
+
+/* ---------- global backdrop ---------- */
+#grid{position:absolute;inset:-200px;opacity:.55;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:90px 90px;
+  -webkit-mask-image:radial-gradient(ellipse 60% 45% at 50% 50%,#000 0%,transparent 100%);
+          mask-image:radial-gradient(ellipse 60% 45% at 50% 50%,#000 0%,transparent 100%)}
+#glow{position:absolute;left:540px;top:900px;width:1500px;height:1500px;margin:-750px 0 0 -750px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,200,150,.22) 0%,rgba(0,200,150,.07) 38%,transparent 68%)}
+#cam{position:absolute;inset:0;transform-origin:540px 960px}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;mix-blend-mode:screen}
+#vignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse 85% 70% at 50% 50%,transparent 55%,rgba(0,0,0,.55) 100%)}
+#grain{position:absolute;inset:0;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.2 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+/* ---------- S1 hook ---------- */
+.hook{position:absolute;left:0;right:0;top:190px;margin:0;text-align:center;font-weight:800;
+  font-size:128px;line-height:.98;letter-spacing:-.045em}
+#rWrap{position:absolute;left:280px;top:600px;width:520px;height:760px}
+#paper{position:absolute;inset:0;background:var(--paper);color:#1d1f1e;font-family:var(--mono);
+  padding:52px 46px;font-size:22px}
+#paper .store{text-align:center;font-weight:800;font-size:34px;letter-spacing:.06em}
+#paper .sub{text-align:center;font-size:17px;opacity:.6;margin-top:6px}
+#paper .dash{border-top:3px dashed rgba(0,0,0,.25);margin:26px 0}
+#paper .row{display:flex;justify-content:space-between;margin:12px 0}
+#paper .tot{font-weight:800;font-size:34px}
+#paper .code{height:60px;margin:30px 20px 0;background:repeating-linear-gradient(90deg,#1d1f1e 0 3px,transparent 3px 7px,#1d1f1e 7px 8px,transparent 8px 13px)}
+#paper .thanks{text-align:center;font-size:18px;margin-top:18px;letter-spacing:.3em;opacity:.6}
+#digital{position:absolute;inset:0;border-radius:30px;background:linear-gradient(160deg,#0F1817,#080C0D);
+  border:2px solid rgba(0,200,150,.55);padding:46px 44px;
+  box-shadow:0 0 0 1px rgba(0,200,150,.12),0 40px 140px rgba(0,200,150,.18);
+  clip-path:inset(0 0 100% 0 round 30px)}
+.tagline-s{font-family:var(--mono);font-size:20px;letter-spacing:.18em;color:var(--accent);display:flex;align-items:center;gap:12px}
+.tagline-s:before{content:"";width:12px;height:12px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px var(--accent)}
+#digital .merch{font-size:60px;font-weight:800;letter-spacing:-.03em;margin:26px 0 30px}
+#digital .f{display:flex;justify-content:space-between;align-items:baseline;padding:16px 0;border-bottom:1px solid var(--line)}
+#digital .f span:first-child{font-family:var(--mono);font-size:18px;letter-spacing:.14em;color:var(--mute)}
+#digital .f span:last-child{font-size:30px;font-weight:600}
+#digital .big{margin-top:34px;font-family:var(--mono);font-size:18px;letter-spacing:.14em;color:var(--mute)}
+#digital .bigv{font-family:var(--mono);font-weight:800;font-size:104px;letter-spacing:-.04em;color:var(--accent);line-height:1}
+#laser{position:absolute;left:-50px;width:620px;top:0;height:6px;border-radius:6px;background:#fff;opacity:0;
+  box-shadow:0 0 12px 3px var(--accent),0 0 60px 14px rgba(0,200,150,.6)}
+#laser:before{content:"";position:absolute;left:50px;right:50px;bottom:6px;height:170px;
+  background:linear-gradient(to top,rgba(0,200,150,.35),transparent)}
+.br{position:absolute;width:84px;height:84px;border:9px solid var(--accent);opacity:0}
+.br.tl{left:-30px;top:-30px;border-right:0;border-bottom:0;border-radius:26px 0 0 0}
+.br.tr{right:-30px;top:-30px;border-left:0;border-bottom:0;border-radius:0 26px 0 0}
+.br.bl{left:-30px;bottom:-30px;border-right:0;border-top:0;border-radius:0 0 0 26px}
+.br.bb{right:-30px;bottom:-30px;border-left:0;border-top:0;border-radius:0 0 26px 0}
+.pill{display:inline-flex;align-items:center;gap:14px;border-radius:999px;font-weight:700;white-space:nowrap}
+#captured{position:absolute;left:50%;bottom:-118px;background:var(--accent);color:var(--accent-ink);
+  font-size:30px;padding:18px 34px;opacity:0}
+
+/* ---------- S2 freelancers ---------- */
+#mantra{position:absolute;left:90px;top:160px;font-size:112px;font-weight:800;letter-spacing:-.045em;line-height:1.02}
+#mantra .m{color:var(--faint)}
+#totalBlock{position:absolute;left:90px;top:590px;width:900px}
+.label{font-family:var(--mono);font-size:22px;letter-spacing:.2em;color:var(--mute)}
+#count{font-family:var(--mono);font-weight:800;font-size:188px;letter-spacing:-.05em;line-height:1.02;color:var(--accent);
+  transform-origin:0 60%;text-shadow:0 0 60px rgba(0,200,150,.25)}
+#rcount{font-size:28px;color:var(--mute);margin-top:6px}
+#claimPill{position:absolute;left:0;top:236px;background:var(--accent);color:var(--accent-ink);font-size:30px;padding:14px 28px;opacity:0}
+.card{position:absolute;left:90px;top:0;width:900px;height:116px;border-radius:24px;background:var(--panel-2);
+  border:1.5px solid rgba(255,255,255,.1);display:flex;align-items:center;padding:0 34px 0 26px;gap:24px;
+  box-shadow:0 30px 60px rgba(0,0,0,.45)}
+.card .mono-i{width:64px;height:64px;border-radius:18px;background:#1B2425;display:grid;place-items:center;font-weight:800;font-size:30px;color:var(--ink)}
+.card .nm{font-size:36px;font-weight:700;letter-spacing:-.02em}
+.card .ct{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:18px;letter-spacing:.12em;color:var(--mute);
+  border:1.5px solid rgba(255,255,255,.14);border-radius:999px;padding:3px 14px}
+.card .am{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:40px}
+#snapFrame{position:absolute;left:60px;top:1030px;width:960px;height:220px;opacity:0}
+#snapFrame .br{opacity:1;width:70px;height:70px;border-width:7px}
+
+/* ---------- S3 groceries ---------- */
+#basketH{position:absolute;left:0;right:0;top:180px;margin:0;text-align:center;font-size:118px;font-weight:800;letter-spacing:-.045em;line-height:1}
+#basketH .ul{position:relative}
+#basketH .ul:after{content:"";position:absolute;left:0;right:.25em;bottom:2px;height:12px;border-radius:12px;background:var(--accent);
+  transform:scaleX(var(--ul,0));transform-origin:0 50%}
+#bcWrap{position:absolute;left:220px;top:700px;width:640px;height:420px}
+#bc{position:absolute;left:0;top:0;width:640px;height:300px;overflow:visible}
+#bcDigits{position:absolute;left:0;right:0;top:318px;text-align:center;font-family:var(--mono);font-size:40px;font-weight:700;letter-spacing:.18em}
+#bcDigits span{opacity:0}
+#reticle{position:absolute;left:-60px;top:-60px;width:760px;height:500px;opacity:0}
+#reticle .br{opacity:1}
+#vlaser{position:absolute;top:-40px;left:0;width:6px;height:380px;margin-left:-3px;border-radius:6px;background:#fff;opacity:0;
+  box-shadow:0 0 12px 3px var(--accent),0 0 60px 14px rgba(0,200,150,.55)}
+#ping{position:absolute;left:540px;top:910px;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;
+  border:6px solid var(--accent);opacity:0}
+#product{position:absolute;left:170px;top:760px;width:740px;height:300px;border-radius:32px;
+  background:linear-gradient(160deg,#111A1A,#0A0F10);border:1.5px solid rgba(0,200,150,.4);
+  box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 80px rgba(0,200,150,.12);display:flex;align-items:center;gap:34px;padding:0 40px;
+  opacity:0}
+#product .pack{width:150px;height:210px;border-radius:18px;flex:none;position:relative;overflow:hidden;
+  background:linear-gradient(170deg,#1E2A29 0%,#141C1C 100%);border:1.5px solid rgba(255,255,255,.12)}
+#product .pack:before{content:"";position:absolute;left:0;right:0;top:64px;height:44px;background:var(--accent);opacity:.9}
+#product .pack:after{content:"";position:absolute;left:26px;right:26px;bottom:26px;height:12px;border-radius:6px;background:rgba(255,255,255,.18);
+  box-shadow:0 -24px 0 rgba(255,255,255,.1)}
+#product .pn{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1.05}
+#product .ps{font-size:24px;color:var(--mute);margin-top:10px}
+#product .flags{display:inline-flex;margin-top:18px;font-size:22px;padding:8px 18px;background:var(--ink);color:#050707;opacity:0}
+#grade{margin-left:auto;flex:none;width:130px;text-align:center}
+#grade .g{width:120px;height:120px;border-radius:30px;margin:0 auto;background:var(--accent);color:var(--accent-ink);
+  display:grid;place-items:center;font-size:84px;font-weight:900;letter-spacing:-.04em}
+#grade .gl{font-family:var(--mono);font-size:16px;letter-spacing:.14em;color:var(--mute);margin-top:12px}
+.tag{position:absolute;left:0;top:0;font-size:31px;font-weight:700;padding:16px 28px;border-radius:999px;white-space:nowrap;
+  display:flex;align-items:center;gap:12px;opacity:0}
+.tag.good{background:rgba(0,200,150,.12);border:2px solid var(--accent);color:var(--accent)}
+.tag.good:before{content:"\2713";font-weight:900}
+.tag.warn{background:var(--ink);color:#050707;border:2px solid var(--ink)}
+.tag.warn:before{content:"!";width:30px;height:30px;border-radius:50%;background:#050707;color:var(--ink);display:grid;place-items:center;font-size:20px;font-weight:900}
+.tag.neu{background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.28);color:var(--ink)}
+#dot{position:absolute;left:540px;top:910px;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;background:var(--accent);transform:scale(0)}
+
+/* ---------- S4 montage ---------- */
+.idx{position:absolute;left:90px;top:120px;font-family:var(--mono);font-size:24px;letter-spacing:.2em;display:flex;gap:18px;align-items:center}
+.idx i{font-style:normal;opacity:.55}
+.ctitle{position:absolute;left:0;right:0;text-align:center;font-weight:800;letter-spacing:-.045em;line-height:.98}
+.csub{position:absolute;left:0;right:0;text-align:center;font-size:40px;font-weight:600}
+/* A — kinetic type */
+#cA{background:var(--accent);color:var(--accent-ink)}
+#cA .row{position:absolute;left:-600px;white-space:nowrap;font-size:210px;font-weight:900;letter-spacing:-.05em;line-height:1;
+  color:transparent;-webkit-text-stroke:3px rgba(3,20,14,.5)}
+#cA .band{position:absolute;left:0;right:0;top:650px;height:540px;background:var(--accent)}
+#cA .solid{position:absolute;left:0;right:0;top:690px;text-align:center;font-size:250px;font-weight:900;letter-spacing:-.06em;line-height:.86}
+#cA .solid .w{padding-bottom:.04em}
+#cA .csub{top:1230px;font-family:var(--mono);font-size:30px;letter-spacing:.14em;font-weight:700}
+/* B — morph */
+#cB{background:var(--bg)}
+#shieldSvg{position:absolute;left:240px;top:560px;width:600px;height:600px;overflow:visible}
+.chip{position:absolute;top:0;left:0;font-size:32px;font-weight:700;padding:16px 30px;border-radius:999px;border:2px solid rgba(255,255,255,.25);opacity:0;white-space:nowrap}
+/* C — split compare */
+#cC{background:var(--bg)}
+#cC .half{position:absolute;top:0;width:540px;height:1920px}
+#cC .L{left:0;background:#0E1414}
+#cC .R{left:540px;background:var(--accent);color:var(--accent-ink)}
+#cC .pk{position:absolute;left:0;right:0;top:720px;text-align:center}
+#cC .pk .n{font-size:44px;font-weight:700;letter-spacing:-.02em}
+#cC .pk .s{font-family:var(--mono);font-weight:800;font-size:200px;letter-spacing:-.06em;line-height:1;margin-top:10px}
+#cC .pk .l{font-family:var(--mono);font-size:20px;letter-spacing:.18em;opacity:.7;margin-top:6px}
+#vs{position:absolute;left:540px;top:1080px;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;background:var(--ink);color:#050707;
+  display:grid;place-items:center;font-size:56px;font-weight:900;letter-spacing:-.04em;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+#better{position:absolute;left:810px;top:1210px;background:var(--accent-ink);color:var(--accent);font-size:28px;padding:14px 26px}
+#cC .ctitle{top:250px;font-size:150px;color:var(--ink)}
+#cC .lay{position:absolute;left:0;right:0;top:0}
+#cC .lay.a{clip-path:inset(0 540px 0 0)}
+#cC .lay.b{color:var(--accent-ink);clip-path:inset(0 0 0 540px)}
+#cC .idx{mix-blend-mode:difference;color:#fff}
+/* D — zoom */
+#cD{background:var(--bg)}
+#zoomBox{position:absolute;left:110px;top:640px;width:860px;transform-origin:0 0}
+#ingr{font-family:var(--mono);font-size:37px;line-height:1.6;color:var(--mute);margin:0}
+#ingr b{font-weight:700;color:var(--ink)}
+#e322{color:var(--accent-ink);background:var(--accent);border-radius:10px;padding:0 10px;font-weight:800}
+#info{position:absolute;left:140px;top:1180px;width:800px;border-radius:30px;background:var(--panel-2);border:1.5px solid rgba(0,200,150,.5);
+  padding:36px 40px;opacity:0;box-shadow:0 40px 100px rgba(0,0,0,.6)}
+#info .h{display:flex;align-items:baseline;gap:22px}
+#info .code{font-family:var(--mono);font-weight:800;font-size:64px;color:var(--accent)}
+#info .nm{font-size:52px;font-weight:800;letter-spacing:-.03em}
+#info .d{font-size:30px;color:var(--mute);margin-top:10px}
+/* E — pan */
+#cE{background:var(--bg)}
+#strip{position:absolute;left:90px;top:720px;height:480px;display:flex;gap:36px}
+.mr{width:300px;height:420px;border-radius:26px;background:var(--panel-2);border:1.5px solid rgba(255,255,255,.1);padding:34px 30px;flex:none;position:relative}
+.mr .t{font-size:30px;font-weight:700}
+.mr .c{font-family:var(--mono);font-size:16px;letter-spacing:.14em;color:var(--mute);margin-top:8px}
+.mr .ln{height:10px;border-radius:5px;background:rgba(255,255,255,.09);margin-top:22px}
+.mr .a{position:absolute;left:30px;bottom:34px;font-family:var(--mono);font-weight:800;font-size:44px}
+.file{width:340px;height:420px;border-radius:26px;flex:none;display:flex;flex-direction:column;justify-content:flex-end;padding:34px;position:relative;
+  background:var(--accent);color:var(--accent-ink)}
+.file:before{content:"";position:absolute;right:0;top:0;width:90px;height:90px;border-radius:0 26px 0 26px;background:rgba(3,20,14,.22)}
+.file .x{font-family:var(--mono);font-weight:800;font-size:96px;letter-spacing:-.04em;line-height:1}
+.file .y{font-size:26px;font-weight:700;margin-top:8px}
+.file.o{background:transparent;color:var(--accent);border:3px solid var(--accent)}
+.file.o:before{background:rgba(0,200,150,.2)}
+/* F — currency */
+#cF{background:var(--accent);color:var(--accent-ink)}
+#slot{position:absolute;left:0;right:0;top:560px;height:560px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(transparent,#000 18%,#000 82%,transparent)}
+#slotCol{position:absolute;left:0;right:0;top:0}
+#slotCol div{height:560px;display:grid;place-items:center;font-size:500px;font-weight:900;letter-spacing:-.05em;line-height:1}
+
+/* ---------- S5 end frame ---------- */
+#logo{position:absolute;left:390px;top:500px;width:300px;height:300px;overflow:visible}
+#wordmark{position:absolute;left:0;right:0;top:860px;text-align:center;font-size:170px;font-weight:800;letter-spacing:-.05em;line-height:1}
+#wordmark .w{padding-bottom:.14em;margin-bottom:-.14em}
+#tag5{position:absolute;left:0;right:0;top:1085px;text-align:center;font-size:58px;font-weight:600;letter-spacing:-.02em;color:#C8D2CF;word-spacing:.12em}
+#gp{position:absolute;left:280px;top:1240px;width:520px;height:132px;border-radius:30px;background:#0D1314;border:2px solid rgba(255,255,255,.18);
+  display:flex;align-items:center;gap:26px;padding:0 40px}
+#gp .k{font-family:var(--mono);font-size:19px;letter-spacing:.22em;color:var(--mute)}
+#gp .v{font-size:48px;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+
+/* ---------- UI (never rendered to video) ---------- */
+#playBtn{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:14px;
+  background:none;border:0;cursor:pointer;color:#fff;font:600 15px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase}
+#playBtn .c{width:112px;height:112px;border-radius:50%;background:var(--accent);display:grid;place-items:center;
+  box-shadow:0 0 0 10px rgba(0,200,150,.18),0 20px 60px rgba(0,0,0,.6);transition:transform .2s}
+#playBtn:hover .c,#playBtn:focus-visible .c{transform:scale(1.07)}
+#playBtn:focus-visible{outline:none}
+#playBtn svg{margin-left:8px}
+#playBtn.hidden{display:none}
+#hint{position:fixed;left:0;right:0;bottom:14px;text-align:center;color:rgba(255,255,255,.35);font:500 12px var(--sans);letter-spacing:.08em;z-index:10}
+body.playing #hint{display:none}
+body.render #playBtn,body.render #hint{display:none}
+</style>
+</head>
+<body>
+<div id="stage" aria-label="TallyShot promo reel">
+  <div id="grid"></div>
+  <div id="glow"></div>
+  <div id="cam">
+
+    <!-- ===== S1 HOOK (0–1s) ===== -->
+    <section class="scene" id="s1">
+      <h1 class="hook" id="hook"><span class="w"><i>Stop</i></span> <span class="w"><i>losing</i></span><br><span class="w"><i class="acc">receipts.</i></span></h1>
+      <div id="rWrap">
+        <div id="paper">
+          <div class="store">CORNER CAFÉ</div>
+          <div class="sub">12 HIGH ST · 26/09/26 08:42</div>
+          <div class="dash"></div>
+          <div class="row"><span>FLAT WHITE</span><span>3.20</span></div>
+          <div class="row"><span>ALMOND CROISSANT</span><span>3.80</span></div>
+          <div class="dash"></div>
+          <div class="row"><span>SUBTOTAL</span><span>7.00</span></div>
+          <div class="row"><span>VAT 20%</span><span>1.40</span></div>
+          <div class="row tot"><span>TOTAL</span><span>£8.40</span></div>
+          <div class="code"></div>
+          <div class="thanks">THANK YOU</div>
+        </div>
+        <div id="digital">
+          <div class="tagline-s">RECEIPT · PARSED</div>
+          <div class="merch">Corner Café</div>
+          <div class="f"><span>DATE</span><span>26 Sep 2026</span></div>
+          <div class="f"><span>CATEGORY</span><span>Meals</span></div>
+          <div class="f"><span>NET</span><span>£7.00</span></div>
+          <div class="f"><span>VAT 20%</span><span>£1.40</span></div>
+          <div class="big">TOTAL</div>
+          <div class="bigv">£8.40</div>
+        </div>
+        <div id="laser"></div>
+        <div class="br tl"></div><div class="br tr"></div><div class="br bl"></div><div class="br bb"></div>
+        <div id="captured" class="pill">&#10003; Captured</div>
+      </div>
+    </section>
+
+    <!-- ===== S2 FREELANCERS (1–5s) ===== -->
+    <section class="scene" id="s2">
+      <div id="mantra">
+        <div class="m" id="m1"><span class="w"><i>Snap it<b>.</b></i></span></div>
+        <div class="m" id="m2"><span class="w"><i>Sort it<b>.</b></i></span></div>
+        <div class="m" id="m3"><span class="w"><i>Claim it<b>.</b></i></span></div>
+      </div>
+      <div id="totalBlock">
+        <div class="label">RUNNING TOTAL · THIS WEEK</div>
+        <div id="count">£0.00</div>
+        <div id="rcount">0 receipts</div>
+        <div id="claimPill" class="pill">&#10003; Claim ready · CSV + PDF</div>
+      </div>
+      <div id="snapFrame"><div class="br tl"></div><div class="br tr"></div><div class="br bl"></div><div class="br bb"></div></div>
+      <div id="cards"></div>
+    </section>
+
+    <!-- ===== S3 GROCERIES (5–10s) ===== -->
+    <section class="scene" id="s3">
+      <h2 id="basketH"><span class="w"><i>Know</i></span> <span class="w"><i>what's</i></span> <span class="w"><i>in</i></span><br><span class="w"><i>your</i></span> <span class="w"><i class="ul">basket.</i></span></h2>
+      <div id="bcWrap">
+        <svg id="bc" viewBox="0 0 640 300">
+          <defs><clipPath id="litClip"><rect id="litRect" x="0" y="-20" width="0" height="340"/></clipPath></defs>
+          <g id="bars"></g>
+          <g id="barsLit" clip-path="url(#litClip)"></g>
+        </svg>
+        <div id="bcDigits"></div>
+        <div id="reticle"><div class="br tl"></div><div class="br tr"></div><div class="br bl"></div><div class="br bb"></div></div>
+        <div id="vlaser"></div>
+      </div>
+      <div id="ping"></div>
+      <div id="product">
+        <div class="pack"></div>
+        <div>
+          <div class="pn">Oat &amp; Honey<br>Granola</div>
+          <div class="ps">500 g · Breakfast cereal</div>
+          <div class="flags pill" id="flagsPill">2 of your flags</div>
+        </div>
+        <div id="grade"><div class="g">B</div><div class="gl">NUTRI-SCORE</div></div>
+      </div>
+      <div id="tags"></div>
+      <div id="dot"></div>
+    </section>
+
+    <!-- ===== S4 MONTAGE (10–13s), one hard cut per beat ===== -->
+    <section class="scene" id="s4">
+      <!-- A: kinetic typography — scan history -->
+      <div class="cut" id="cA">
+        <div id="rowsA"></div>
+        <div class="band"></div>
+        <div class="solid"><span class="w"><i>Scan</i></span><br><span class="w"><i>history.</i></span></div>
+        <div class="csub">EVERY SCAN, SAVED</div>
+        <div class="idx"><span>01</span><i>/ 06</i></div>
+      </div>
+      <!-- B: shape morph — allergen flags -->
+      <div class="cut" id="cB">
+        <div class="idx"><span>02</span><i>/ 06</i></div>
+        <div class="ctitle" style="top:250px;font-size:132px">Allergen<br><span class="acc">flags.</span></div>
+        <svg id="shieldSvg" viewBox="0 0 600 600">
+          <path id="morph" style="fill:var(--accent)" d="M300,60 C432.5,60 540,167.5 540,300 C540,432.5 432.5,540 300,540 C167.5,540 60,432.5 60,300 C60,167.5 167.5,60 300,60 Z"/>
+          <path id="check" d="M190,300 L270,380 L420,215" style="fill:none;stroke:var(--accent-ink);stroke-width:46;stroke-linecap:round;stroke-linejoin:round"/>
+        </svg>
+        <div id="chipsB"></div>
+      </div>
+      <!-- C: split screen — compare -->
+      <div class="cut" id="cC">
+        <div class="half L"><div class="pk"><div class="n">Granola</div><div class="s">58</div><div class="l">HEALTH</div></div></div>
+        <div class="half R"><div class="pk"><div class="n">Muesli</div><div class="s">81</div><div class="l">HEALTH</div></div></div>
+        <div id="vs">VS</div>
+        <div id="better" class="pill">&#10003; Better pick</div>
+        <div class="ctitle"><div class="lay a"><span class="w"><i>Compare.</i></span></div><div class="lay b"><span class="w"><i>Compare.</i></span></div></div>
+        <div class="idx"><span>03</span><i>/ 06</i></div>
+      </div>
+      <!-- D: camera zoom — additives decoded -->
+      <div class="cut" id="cD">
+        <div id="zoomBox"><p id="ingr"><b>INGREDIENTS:</b> whole-grain oats (58%), honey (12%), sunflower oil, sugar, rice flour, barley malt extract, salt, emulsifier (<span id="e322">E322</span>), natural flavouring, antioxidant (E306).</p></div>
+        <div class="ctitle" id="dTitle" style="top:250px;font-size:132px">Additives,<br><span class="acc">decoded.</span></div>
+        <div id="info"><div class="h"><span class="code">E322</span><span class="nm">Lecithin</span></div><div class="d">Emulsifier · usually from soya or sunflower</div></div>
+        <div class="idx"><span>04</span><i>/ 06</i></div>
+      </div>
+      <!-- E: camera pan — export -->
+      <div class="cut" id="cE">
+        <div class="ctitle" style="top:250px;font-size:132px">Export for<br><span class="acc">tax time.</span></div>
+        <div id="strip"></div>
+        <div class="idx"><span>05</span><i>/ 06</i></div>
+      </div>
+      <!-- F: colour shift — any currency -->
+      <div class="cut" id="cF">
+        <div class="ctitle" style="top:250px;font-size:132px">Any<br>currency.</div>
+        <div id="slot"><div id="slotCol"><div>$</div><div>€</div><div>¥</div><div>£</div></div></div>
+        <div class="csub" id="fSub" style="top:1200px">VAT · GST · sales tax presets</div>
+        <div class="idx"><span>06</span><i>/ 06</i></div>
+      </div>
+    </section>
+
+    <!-- ===== S5 END FRAME (13–15s) ===== -->
+    <section class="scene" id="s5">
+      <svg id="logo" viewBox="0 0 300 300" style="fill:none;stroke-linecap:round;stroke-linejoin:round">
+        <g style="stroke:var(--ink);stroke-width:16">
+          <path class="lb" d="M22,96 V52 Q22,22 52,22 H96"/>
+          <path class="lb" d="M204,22 H248 Q278,22 278,52 V96"/>
+          <path class="lb" d="M22,204 V248 Q22,278 52,278 H96"/>
+          <path class="lb" d="M204,278 H248 Q278,278 278,248 V204"/>
+        </g>
+        <g style="stroke:var(--ink);stroke-width:18">
+          <line class="tb" x1="100" y1="92" x2="100" y2="208"/>
+          <line class="tb" x1="133" y1="92" x2="133" y2="208"/>
+          <line class="tb" x1="167" y1="92" x2="167" y2="208"/>
+          <line class="tb" x1="200" y1="92" x2="200" y2="208"/>
+        </g>
+        <line id="slash" x1="74" y1="188" x2="226" y2="112" style="stroke:var(--accent);stroke-width:20"/>
+      </svg>
+      <div id="wordmark"></div>
+      <div id="tag5"><span class="w"><i>Scan.</i></span> <span class="w"><i>Tally.</i></span> <span class="w"><i class="acc">Done.</i></span></div>
+      <div id="gp">
+        <svg width="62" height="68" viewBox="0 0 62 68"><path d="M8,6 L56,34 L8,62 Z" style="fill:none;stroke:var(--accent);stroke-width:6;stroke-linejoin:round"/></svg>
+        <div><div class="k">GET IT ON</div><div class="v">Google Play</div></div>
+      </div>
+    </section>
+
+  </div>
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+</div>
+
+<button id="playBtn" aria-label="Play">
+  <span class="c"><svg width="40" height="46" viewBox="0 0 40 46"><path d="M4,4 L36,23 L4,42 Z" fill="#03140E" stroke="#03140E" stroke-width="6" stroke-linejoin="round"/></svg></span>
+  <span id="playLbl">Play</span>
+</button>
+<div id="hint">Click the reel or press space to pause</div>
+
+<script>
+(() => {
+'use strict';
+const q  = (s, r = document) => r.querySelector(s);
+const qa = (s, r = document) => [...r.querySelectorAll(s)];
+const params = new URLSearchParams(location.search);
+const RENDER = params.has('render');
+if (RENDER) document.body.classList.add('render');
+
+const DUR = 15;              // seconds
+const BEAT = 0.5;            // 120 BPM: every hit lands on a multiple of this
+const CUR = '£';
+const ACCENT = '#00C896', INK = '#F2F5F4', FAINT = 'rgba(255,255,255,.16)';
+
+/* deterministic randomness so every render is identical */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd = mulberry32(20260926);
+const rr = (a, b) => a + (b - a) * rnd();
+
+/* ---------- stage fit ---------- */
+const stage = q('#stage');
+function fit(){
+  if (RENDER) { stage.style.transform = 'none'; return; }
+  const s = Math.min(innerWidth / 1080, innerHeight / 1920);
+  stage.style.transform = `translate(${(innerWidth - 1080 * s) / 2}px,${(innerHeight - 1920 * s) / 2}px) scale(${s})`;
+}
+addEventListener('resize', fit); fit();
+
+/* ================= generated DOM ================= */
+// paper receipt: torn zig-zag bottom edge
+(() => {
+  const pts = ['0 0', '100% 0'], teeth = 20, h = 760, w = 520;
+  for (let i = teeth; i >= 0; i--) pts.push(`${(i / teeth) * w}px ${i % 2 ? h - 16 : h}px`);
+  q('#paper').style.clipPath = `polygon(${pts.join(',')})`;
+})();
+
+// S2 ledger cards
+const CARDS = [
+  { n: 'Corner Café', c: 'MEALS',    a: 8.40,  i: 'C' },
+  { n: 'Uber',        c: 'TRAVEL',   a: 14.20, i: 'U' },
+  { n: 'Adobe CC',    c: 'SOFTWARE', a: 19.97, i: 'A' },
+  { n: 'Rail ticket', c: 'TRAVEL',   a: 42.50, i: 'R' },
+  { n: 'Printer ink', c: 'SUPPLIES', a: 23.99, i: 'P' },
+];
+const SORTED = [1, 3, 0, 2, 4];   // grouped by category
+const cardEls = CARDS.map((d, k) => {
+  const el = document.createElement('div');
+  el.className = 'card';
+  el.style.zIndex = 10 + k;
+  el.innerHTML = `<div class="mono-i">${d.i}</div><div><div class="nm">${d.n}</div><div class="ct">${d.c}</div></div><div class="am">${CUR}${d.a.toFixed(2)}</div>`;
+  q('#cards').appendChild(el);
+  return el;
+});
+
+// S3 barcode (EAN-style pattern, generated)
+const NS = 'http://www.w3.org/2000/svg';
+const barRects = [], litRects = [];
+(() => {
+  const bars = [];
+  let x = 6;
+  const push = (w, gap, tall) => { bars.push({ x, w, tall }); x += w + gap; };
+  const guard = () => { push(6, 8, true); push(6, 8, true); };
+  const half = () => { for (let i = 0; i < 16; i++) push([4, 6, 10, 14][Math.floor(rnd() * 4)], [5, 8, 11][Math.floor(rnd() * 3)], false); };
+  guard(); half(); guard(); half(); guard();
+  const scale = 628 / x;
+  bars.forEach(b => {
+    [['#bars', INK, barRects], ['#barsLit', ACCENT, litRects]].forEach(([g, fill, arr]) => {
+      const r = document.createElementNS(NS, 'rect');
+      r.setAttribute('x', (b.x * scale).toFixed(2));
+      r.setAttribute('width', (b.w * scale).toFixed(2));
+      r.setAttribute('y', 0);
+      r.setAttribute('height', b.tall ? 300 : 272);
+      r.setAttribute('fill', fill);
+      q(g).appendChild(r);
+      arr.push(r);
+    });
+  });
+  q('#bcDigits').innerHTML = '5 012345 678900'.split('').map(ch => `<span>${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+})();
+
+// S3 ingredient / health tags  [kind, label, centreX, centreY]
+const TAGS = [
+  ['good', 'Whole-grain oats',      300, 560],
+  ['good', 'High fibre · 7.2g',     785, 590],
+  ['neu',  'Honey',                 165, 680],
+  ['neu',  'Sunflower oil',         860, 690],
+  ['warn', 'Contains gluten',       320, 1160],
+  ['warn', 'Sugar · 18g/100g',      770, 1170],
+  ['good', 'Palm-oil free',         255, 1280],
+  ['neu',  'E322 · Lecithin',       745, 1290],
+  ['warn', 'Soya',                  385, 1400],
+  ['warn', 'May contain nuts',      770, 1410],
+  ['neu',  'Salt · 0.1g',           230, 1520],
+  ['good', 'No artificial colours', 700, 1525],
+];
+const ORIGIN = { x: 540, y: 910 };
+const tagEls = TAGS.map(([k, t, x, y]) => {
+  const el = document.createElement('div');
+  el.className = 'tag ' + k;
+  el.textContent = t;
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  el.dataset.dx = ORIGIN.x - x; el.dataset.dy = ORIGIN.y - y;
+  q('#tags').appendChild(el);
+  return el;
+});
+
+// S4-A kinetic rows
+for (let i = 0; i < 9; i++) {
+  const r = document.createElement('div');
+  r.className = 'row';
+  r.style.top = (i * 212 - 20) + 'px';
+  r.textContent = 'HISTORY SCAN HISTORY SCAN HISTORY SCAN';
+  q('#rowsA').appendChild(r);
+}
+// S4-B allergen chips (labels match the app's flag list)
+const CHIPS = [['Gluten', 205, 1250], ['Peanuts', 445, 1250], ['Soya', 655, 1250], ['Dairy', 855, 1250],
+               ['Sesame', 290, 1370], ['Tree nuts', 540, 1370], ['+ 12 more', 800, 1370]];
+const chipEls = CHIPS.map(([t, x, y], i) => {
+  const el = document.createElement('div');
+  el.className = 'chip';
+  el.textContent = t;
+  if (i < 2) { el.style.background = ACCENT; el.style.color = '#03140E'; el.style.borderColor = ACCENT; }
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  q('#chipsB').appendChild(el);
+  return el;
+});
+// S4-E export strip
+(() => {
+  const strip = q('#strip');
+  [['Uber', 'TRAVEL', 14.20], ['Adobe CC', 'SOFTWARE', 19.97], ['Rail ticket', 'TRAVEL', 42.50], ['Corner Café', 'MEALS', 8.40],
+   ['Printer ink', 'SUPPLIES', 23.99], ['Co-working', 'OFFICE', 35.00], ['Domain', 'SOFTWARE', 11.99]].forEach(([t, c, a]) => {
+    const d = document.createElement('div');
+    d.className = 'mr';
+    d.innerHTML = `<div class="t">${t}</div><div class="c">${c}</div><div class="ln" style="width:80%"></div><div class="ln" style="width:60%"></div><div class="ln" style="width:70%"></div><div class="a">${CUR}${a.toFixed(2)}</div>`;
+    strip.appendChild(d);
+  });
+  strip.insertAdjacentHTML('beforeend', `<div class="file"><div class="x">CSV</div><div class="y">Spreadsheet-ready</div></div><div class="file o"><div class="x">PDF</div><div class="y">For your accountant</div></div>`);
+})();
+// S5 wordmark letters
+q('#wordmark').innerHTML = 'TallyShot'.split('').map((ch, i) => `<span class="w"><i${i >= 5 ? ' class="acc"' : ''}>${ch}</i></span>`).join('');
+
+/* ================= live text readouts ================= */
+const state = { total: 0, receipts: 0 };
+const countEl = q('#count'), rcountEl = q('#rcount');
+function sync(){
+  countEl.textContent = CUR + state.total.toFixed(2);
+  const n = Math.round(state.receipts);
+  rcountEl.textContent = n + (n === 1 ? ' receipt' : ' receipts');
+}
+
+/* ================= timeline ================= */
+function build(){
+  /* initial states — every element sits at its CSS layout position, motion is transforms only */
+  gsap.set('.scene, .cut', { autoAlpha: 0 });
+  gsap.set('.w > i', { yPercent: 115 });
+  gsap.set('#rWrap', { x: 760, y: 1100, rotation: 38, scale: 1.35, filter: 'blur(14px)' });
+  gsap.set('#captured, #better', { xPercent: -50 });
+  gsap.set(cardEls, { autoAlpha: 0 });
+  gsap.set(barRects.concat(litRects), { scaleY: 0, transformOrigin: '50% 100%' });
+  tagEls.forEach(el => gsap.set(el, { x: +el.dataset.dx, y: +el.dataset.dy, xPercent: -50, yPercent: -50, scale: .2, rotation: rr(-40, 40) }));
+  gsap.set('#product', { scaleY: 0, scaleX: .3 });
+  gsap.set('#grade .g', { scale: 0 });
+  gsap.set(chipEls, { xPercent: -50, yPercent: -50, scale: .4 });
+  gsap.set('#vs, #better, #gp, #fSub', { opacity: 0 });
+  const slash = q('#slash'), slen = slash.getTotalLength();
+  gsap.set(slash, { strokeDasharray: slen, strokeDashoffset: slen });
+  const chk = q('#check'), clen = chk.getTotalLength();
+  gsap.set(chk, { strokeDasharray: clen, strokeDashoffset: clen });
+  const lbs = qa('.lb'), tbs = qa('.tb');
+  gsap.set(lbs, { opacity: 0, scale: 1.6, svgOrigin: '150 150' });
+  gsap.set(tbs, { scaleY: 0, transformOrigin: '50% 100%' });
+  state.total = 0; state.receipts = 0; sync();
+
+  const tl = gsap.timeline({ paused: true, defaults: { ease: 'power3.out' } });
+
+  /* helpers */
+  const flash = (t, o = .22, d = .35) => tl.fromTo('#flash', { opacity: o }, { opacity: 0, duration: d, ease: 'power2.out', immediateRender: false }, t);
+  const shake = (t, amp = 14, n = 6, dur = .3) => {
+    const step = dur / n;
+    for (let i = 0; i < n; i++) {
+      const k = 1 - i / n;
+      tl.to('#cam', { x: rr(-amp, amp) * k, y: rr(-amp, amp) * k, rotation: rr(-.6, .6) * k, duration: step, ease: 'sine.inOut' }, t + i * step);
+    }
+    tl.to('#cam', { x: 0, y: 0, rotation: 0, duration: step, ease: 'sine.out' }, t + dur);
+  };
+  const words = (sel, t, stagger = .08, dur = .5) => tl.to(qa(sel), { yPercent: 0, duration: dur, stagger, ease: 'expo.out' }, t);
+  const wordsOut = (sel, t, stagger = .03, dur = .25) => tl.to(qa(sel), { yPercent: -115, duration: dur, stagger, ease: 'power3.in' }, t);
+  const show = (sel, t) => tl.set(sel, { autoAlpha: 1 }, t);
+  const hide = (sel, t) => tl.set(sel, { autoAlpha: 0 }, t);
+
+  // backdrop breathes on every beat until the end frame
+  for (let b = 0; b < 26; b++) tl.fromTo('#glow', { scale: 1.07 }, { scale: 1, duration: BEAT * .9, ease: 'power2.out', immediateRender: false }, b * BEAT);
+
+  /* ---------------- 0–1s HOOK ---------------- */
+  show('#s1', 0);
+  words('#hook .w > i', 0.02, .07, .45);
+  tl.to('#rWrap', { x: 0, y: 0, rotation: -4, scale: 1, filter: 'blur(0px)', duration: .42, ease: 'expo.out' }, 0);
+  shake(.36, 10, 4, .2);
+  // laser sweep: paper turns into data behind the line
+  tl.to('#laser', { opacity: 1, duration: .05 }, .4);
+  tl.fromTo('#laser', { y: 0 }, { y: 760, duration: .34, ease: 'power1.inOut', immediateRender: false }, .4);
+  tl.to('#digital', { clipPath: 'inset(0 0 0% 0 round 30px)', duration: .34, ease: 'power1.inOut' }, .4);
+  tl.to('#laser', { opacity: 0, duration: .08 }, .74);
+  // snap into clean data
+  tl.to('#rWrap', { rotation: 0, scale: 1.03, duration: .12, ease: 'power2.out' }, .74);
+  tl.to('#rWrap', { scale: 1, duration: .25, ease: 'back.out(3)' }, .86);
+  tl.fromTo('#rWrap .br', { opacity: 0, scale: 1.8 }, { opacity: 1, scale: 1, duration: .22, ease: 'back.out(2.5)', stagger: .02, immediateRender: false }, .75);
+  tl.fromTo('#captured', { opacity: 0, y: 30, scale: .8 }, { opacity: 1, y: 0, scale: 1, duration: .25, ease: 'back.out(2.5)', immediateRender: false }, .78);
+  flash(.75, .18);
+
+  /* ---------------- 1–5s FREELANCERS ---------------- */
+  // hand-off: hook exits, the parsed receipt drops into the ledger
+  wordsOut('#hook .w > i', 1.0, .03, .22);
+  show('#s2', 1.0);
+  tl.to('#captured', { opacity: 0, duration: .1 }, 1.0);
+  tl.to('#rWrap', { y: 470, scale: .22, rotation: -6, opacity: 0, duration: .3, ease: 'power3.in' }, 1.0);
+  hide('#s1', 1.35);
+
+  const activate = (id, t) => {
+    tl.to(id, { color: INK, duration: .05 }, t);
+    tl.to(id + ' b', { color: ACCENT, duration: .05 }, t);
+    words(id + ' .w > i', t, 0, .45);
+  };
+  const dim = (id, t) => { tl.to(id, { color: FAINT, duration: .2 }, t); tl.to(id + ' b', { color: FAINT, duration: .2 }, t); };
+
+  activate('#m1', 1.0);
+  tl.fromTo('#totalBlock', { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .4, ease: 'expo.out', immediateRender: false }, 1.0);
+
+  // SNAP IT — receipts land on the beat, accelerating into the sort
+  const drops = [1.25, 1.5, 2.0, 2.25, 2.5];
+  const rots  = [-5, 4, -2.5, 6, -3.5];
+  const offs  = [[0, 0], [18, -26], [-22, 12], [10, 30], [-8, -10]];
+  let running = 0;
+  cardEls.forEach((el, k) => {
+    const t = drops[k];
+    running += CARDS[k].a;
+    tl.set(el, { autoAlpha: 1 }, t - .18);
+    tl.fromTo(el, { y: 700, x: offs[k][0] * 4, rotation: rots[k] * 5, scale: 1.25 },
+      { y: 1080 + offs[k][1], x: offs[k][0], rotation: rots[k], scale: 1, duration: .3, ease: 'expo.out', immediateRender: false }, t - .18);
+    tl.fromTo('#snapFrame', { opacity: 1, scale: 1.12 }, { opacity: 0, scale: 1, duration: .32, ease: 'power2.out', immediateRender: false }, t);
+    flash(t, .1, .22);
+    shake(t, 7, 3, .15);
+    tl.to(state, { total: running, receipts: k + 1, duration: .38, ease: 'power2.out', onUpdate: sync }, t);
+    tl.fromTo('#count', { scale: 1.06 }, { scale: 1, duration: .3, ease: 'power2.out', immediateRender: false }, t);
+  });
+
+  // 3.0 SORT IT — the messy pile snaps into a categorised ledger
+  dim('#m1', 3.0);
+  activate('#m2', 3.0);
+  SORTED.forEach((k, row) => tl.to(cardEls[k], { x: 0, y: 920 + row * 128, rotation: 0, duration: .5, ease: 'expo.inOut' }, 3.0 + row * .04));
+  tl.to(SORTED.map(k => q('.ct', cardEls[k])), { color: ACCENT, borderColor: 'rgba(0,200,150,.6)', scale: 1.12, duration: .12, stagger: .04 }, 3.35);
+  tl.to(SORTED.map(k => q('.ct', cardEls[k])), { scale: 1, duration: .2, stagger: .04, ease: 'back.out(3)' }, 3.47);
+  tl.to(SORTED.map(k => cardEls[k]), { x: 14, duration: .12, yoyo: true, repeat: 1, stagger: .04, ease: 'power2.out' }, 3.5);
+
+  // 4.0 CLAIM IT — rows collapse into the total
+  dim('#m2', 4.0);
+  activate('#m3', 4.0);
+  SORTED.slice().reverse().forEach((k, i) => tl.to(cardEls[k], { y: 700, scale: .4, autoAlpha: 0, duration: .32, ease: 'power3.in' }, 4.0 + i * .04));
+  tl.to('#count', { scale: 1.14, duration: .12, ease: 'power2.out' }, 4.3);
+  tl.to('#count', { scale: 1, duration: .35, ease: 'back.out(3)' }, 4.42);
+  flash(4.3, .18);
+  shake(4.3, 12, 4, .22);
+  tl.to('#rcount', { opacity: 0, duration: .1 }, 4.3);
+  tl.fromTo('#claimPill', { opacity: 0, y: 40, scale: .7 }, { opacity: 1, y: 0, scale: 1, duration: .35, ease: 'back.out(2.2)', immediateRender: false }, 4.35);
+  tl.to('#mantra .m', { color: INK, duration: .2, stagger: .05 }, 4.5);
+  tl.to('#mantra .m b', { color: ACCENT, duration: .2, stagger: .05 }, 4.5);
+
+  // whip-pan to groceries, landing on 5.0
+  tl.to('#s2', { x: -760, filter: 'blur(26px)', duration: .22, ease: 'power3.in' }, 4.8);
+  tl.to('#glow', { x: 260, y: -120, duration: .6, ease: 'power2.inOut' }, 4.7);
+  hide('#s2', 5.02);
+
+  /* ---------------- 5–10s GROCERIES ---------------- */
+  show('#s3', 5.0);
+  tl.fromTo('#s3', { x: 760, filter: 'blur(26px)' }, { x: 0, filter: 'blur(0px)', duration: .35, ease: 'expo.out', immediateRender: false }, 5.0);
+  qa('#basketH .w > i').forEach((w, i) => tl.to(w, { yPercent: 0, duration: .4, ease: 'expo.out' }, 5.0 + i * .25));
+  // barcode draws itself
+  tl.to(barRects, { scaleY: 1, duration: .28, ease: 'expo.out', stagger: .014 }, 5.1);
+  tl.to(litRects, { scaleY: 1, duration: .01, stagger: .014 }, 5.1);
+  tl.to(qa('#bcDigits span'), { opacity: 1, duration: .01, stagger: .045 }, 5.3);
+  // 6.0 reticle snaps, laser sweeps, bars light up
+  tl.fromTo('#reticle', { opacity: 0, scale: 1.3 }, { opacity: 1, scale: 1, duration: .28, ease: 'back.out(2.5)', immediateRender: false }, 6.0);
+  flash(6.0, .1, .2);
+  tl.to('#vlaser', { opacity: 1, duration: .04 }, 6.05);
+  tl.fromTo('#vlaser', { x: 0 }, { x: 640, duration: .4, ease: 'power1.inOut', immediateRender: false }, 6.05);
+  tl.to('#litRect', { attr: { width: 640 }, duration: .4, ease: 'power1.inOut' }, 6.05);
+  tl.to('#vlaser', { opacity: 0, duration: .05 }, 6.45);
+  // 6.5 beep: barcode collapses to a line, product card unfolds from it
+  tl.fromTo('#ping', { opacity: 1, scale: .3 }, { opacity: 0, scale: 3.2, duration: .6, ease: 'power2.out', immediateRender: false }, 6.5);
+  tl.to('#bcWrap', { scaleY: .02, scaleX: 1.08, duration: .16, ease: 'power3.in' }, 6.48);
+  tl.to('#bcWrap', { opacity: 0, duration: .05 }, 6.64);
+  tl.to('#reticle', { opacity: 0, duration: .1 }, 6.5);
+  tl.to('#product', { opacity: 1, duration: .01 }, 6.62);
+  tl.to('#product', { scaleX: 1, duration: .14, ease: 'power3.out' }, 6.62);
+  tl.to('#product', { scaleY: 1, duration: .32, ease: 'back.out(1.8)' }, 6.72);
+  tl.fromTo('#grade .g', { scale: 0, rotation: -90 }, { scale: 1, rotation: 0, duration: .35, ease: 'back.out(2.5)', immediateRender: false }, 6.85);
+
+  // 7.0 EXPLODE into ingredient / health tags
+  flash(7.0, .24, .4);
+  shake(7.0, 22, 6, .32);
+  tl.fromTo('#ping', { opacity: .9, scale: .5 }, { opacity: 0, scale: 5, duration: .7, ease: 'power2.out', immediateRender: false }, 7.0);
+  tl.fromTo('#product', { scale: 1.08 }, { scale: 1, duration: .4, ease: 'back.out(3)', immediateRender: false }, 7.0);
+  tagEls.forEach((el, i) => {
+    tl.to(el, { opacity: 1, duration: .05 }, 7.0 + i * .012);
+    tl.to(el, { x: 0, y: 0, scale: 1, rotation: rr(-3.5, 3.5), duration: .8, ease: 'expo.out' }, 7.0 + i * .012);
+    tl.to(el, { x: rr(-18, 18), y: rr(-24, 10), duration: 1.6, ease: 'sine.inOut' }, 7.85);   // slow drift while it reads
+  });
+  tl.to('#basketH', { '--ul': 1, duration: .4, ease: 'expo.out' }, 7.0);
+  // 8.0 the viewer's own allergen flags light up
+  const flagged = tagEls.filter(e => /gluten|Soya/.test(e.textContent));
+  tl.fromTo(flagged, { scale: 1 }, { scale: 1.16, duration: .14, yoyo: true, repeat: 1, ease: 'power2.out', immediateRender: false }, 8.0);
+  tl.fromTo('#flagsPill', { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: .35, ease: 'expo.out', immediateRender: false }, 8.0);
+  tl.fromTo(tagEls.filter(e => e.classList.contains('good')), { scale: 1 }, { scale: 1.1, duration: .12, yoyo: true, repeat: 1, stagger: .03, immediateRender: false }, 8.5);
+  tl.fromTo('#grade .g', { scale: 1 }, { scale: 1.12, duration: .12, yoyo: true, repeat: 1, immediateRender: false }, 9.0);
+  // 9.5 implode to a point, which floods the frame with the accent
+  tagEls.forEach((el, i) => tl.to(el, { x: +el.dataset.dx, y: +el.dataset.dy, scale: 0, rotation: rr(-90, 90), duration: .3, ease: 'power4.in' }, 9.45 + i * .01));
+  tl.to('#product', { scale: 0, rotation: 8, duration: .3, ease: 'power4.in' }, 9.5);
+  wordsOut('#basketH .w > i', 9.5, .02, .22);
+  tl.to('#dot', { scale: 1, duration: .08 }, 9.78);
+  tl.to('#dot', { scale: 60, duration: .2, ease: 'power3.in' }, 9.8);
+  tl.set('#glow', { x: 0, y: 0 }, 10.0);
+
+  /* ---------------- 10–13s MONTAGE: one technique per beat ---------------- */
+  show('#s4', 10.0);
+  hide('#s3', 10.0);
+  const cut = (id, t) => { show(id, t); hide(id, t + BEAT); };
+
+  // A · 10.0 kinetic typography — scan history
+  cut('#cA', 10.0);
+  qa('#rowsA .row').forEach((r, i) => {
+    const dir = i % 2 ? 1 : -1;
+    tl.fromTo(r, { x: dir * -260 }, { x: dir * 260, duration: BEAT, ease: 'none', immediateRender: false }, 10.0);
+  });
+  tl.fromTo('#cA .solid', { scale: 1.5 }, { scale: 1, duration: .3, ease: 'expo.out', immediateRender: false }, 10.0);
+  words('#cA .solid .w > i', 10.0, .06, .3);
+
+  // B · 10.5 shape morph — circle becomes a shield, check draws in
+  cut('#cB', 10.5);
+  tl.fromTo('#shieldSvg', { scale: 0, rotation: -120, transformOrigin: '50% 50%' }, { scale: .72, rotation: 0, duration: .16, ease: 'back.out(2)', immediateRender: false }, 10.5);
+  tl.to('#morph', { attr: { d: 'M300,40 C380,80 460,100 530,110 C530,340 450,480 300,570 C150,480 70,340 70,110 C140,100 220,80 300,40 Z' }, duration: .2, ease: 'power3.inOut' }, 10.62);
+  tl.to('#shieldSvg', { scale: 1, duration: .2, ease: 'back.out(2.5)' }, 10.62);
+  tl.to('#check', { strokeDashoffset: 0, duration: .14, ease: 'power2.out' }, 10.76);
+  tl.to(chipEls, { opacity: 1, scale: 1, duration: .18, ease: 'back.out(3)', stagger: .025 }, 10.7);
+  tl.fromTo('#cB .ctitle', { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .25, ease: 'expo.out', immediateRender: false }, 10.5);
+
+  // C · 11.0 split screen — compare
+  cut('#cC', 11.0);
+  tl.fromTo('#cC .L', { y: -1920 }, { y: 0, duration: .2, ease: 'expo.out', immediateRender: false }, 11.0);
+  tl.fromTo('#cC .R', { y: 1920 }, { y: 0, duration: .2, ease: 'expo.out', immediateRender: false }, 11.0);
+  words('#cC .ctitle .w > i', 11.05, 0, .25);
+  tl.fromTo('#vs', { scale: 3, rotation: -25, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: .18, ease: 'expo.out', immediateRender: false }, 11.12);
+  tl.fromTo('#cC .R .s', { scale: 1 }, { scale: 1.18, duration: .1, ease: 'power2.out', immediateRender: false }, 11.28);
+  tl.to('#cC .L .pk', { opacity: .35, duration: .1 }, 11.28);
+  tl.fromTo('#better', { scale: .5, opacity: 0 }, { scale: 1, opacity: 1, duration: .18, ease: 'back.out(3)', immediateRender: false }, 11.3);
+
+  // D · 11.5 camera zoom — push into the ingredients list onto E322
+  cut('#cD', 11.5);
+  const e = q('#e322');
+  const ox = e.offsetLeft + e.offsetWidth / 2, oy = e.offsetTop + e.offsetHeight / 2;
+  const Z = 3.6;                                           // E322 lands at stage (540, 900)
+  tl.fromTo('#zoomBox', { x: 0, y: 0, scale: 1 },
+    { x: 430 - ox * Z, y: 260 - oy * Z, scale: Z, duration: .26, ease: 'power3.inOut', immediateRender: false }, 11.55);
+  tl.fromTo('#zoomBox', { filter: 'blur(0px)' }, { filter: 'blur(6px)', duration: .13, ease: 'power2.in', immediateRender: false }, 11.55);
+  tl.to('#zoomBox', { filter: 'blur(0px)', duration: .13, ease: 'power2.out' }, 11.68);
+  tl.to('#dTitle', { opacity: 0, duration: .12 }, 11.6);
+  tl.fromTo('#info', { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: .18, ease: 'expo.out', immediateRender: false }, 11.78);
+
+  // E · 12.0 camera pan — whip along the receipts to the export files
+  cut('#cE', 12.0);
+  tl.fromTo('#strip', { x: 200 }, { x: -2260, duration: .38, ease: 'power3.inOut', immediateRender: false }, 12.0);
+  tl.fromTo('#strip', { filter: 'blur(0px)' }, { filter: 'blur(10px)', duration: .19, ease: 'power2.in', immediateRender: false }, 12.0);
+  tl.to('#strip', { filter: 'blur(0px)', duration: .17, ease: 'power2.out' }, 12.19);
+  tl.fromTo('#cE .file', { y: 30 }, { y: 0, duration: .15, ease: 'back.out(3)', stagger: .04, immediateRender: false }, 12.32);
+
+  // F · 12.5 colour shift — accent drains to dark while currencies roll
+  cut('#cF', 12.5);
+  tl.fromTo('#slotCol', { y: 0 }, { y: -1680, duration: .34, ease: 'expo.inOut', immediateRender: false }, 12.52);
+  tl.fromTo('#cF', { backgroundColor: ACCENT, color: '#03140E' }, { backgroundColor: '#06080A', color: INK, duration: .3, ease: 'power2.inOut', immediateRender: false }, 12.62);
+  tl.fromTo('#fSub', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .2, ease: 'expo.out', immediateRender: false }, 12.6);
+  tl.fromTo('#slot', { scale: 1 }, { scale: .9, duration: .3, ease: 'power2.inOut', immediateRender: false }, 12.62);
+  hide('#s4', 13.0);
+
+  /* ---------------- 13–15s END FRAME ---------------- */
+  show('#s5', 13.0);
+  tl.to(lbs, { opacity: 1, scale: 1, duration: .3, ease: 'back.out(2.2)', stagger: .03 }, 13.0);
+  tl.to(tbs, { scaleY: 1, duration: .22, ease: 'expo.out', stagger: .05 }, 13.1);
+  tl.to(slash, { strokeDashoffset: 0, duration: .16, ease: 'power3.out' }, 13.4);
+  tl.fromTo('#logo', { scale: 1.08 }, { scale: 1, duration: .3, ease: 'back.out(3)', immediateRender: false }, 13.5);
+  flash(13.5, .08, .25);
+  words('#wordmark .w > i', 13.25, .03, .45);
+  words('#tag5 .w > i', 13.5, .08, .35);
+  tl.fromTo('#gp', { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: .3, ease: 'expo.out', immediateRender: false }, 13.65);
+  // 14.0 → 15.0: nothing moves. Pad the timeline to exactly 15s.
+  tl.set({}, {}, DUR);
+  return tl;
+}
+
+/* ================= boot ================= */
+let tl;
+const ready = (async () => {
+  try {
+    await Promise.all(['800 100px "Inter Tight"', '900 100px "Inter Tight"', '700 40px "JetBrains Mono"', '800 40px "JetBrains Mono"'].map(f => document.fonts.load(f)));
+    await document.fonts.ready;
+  } catch (_) {}
+  tl = build();            // build after fonts so layout measurements are final
+  window.__tl = tl;
+})();
+
+// Frame-accurate hook used by render.js
+window.__reel = {
+  duration: DUR, ready,
+  async seek(t){
+    await ready;
+    tl.pause();
+    tl.totalTime(Math.min(Math.max(t, 0), DUR));
+    sync();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
+};
+
+if (!RENDER) {
+  const btn = q('#playBtn'), lbl = q('#playLbl');
+  gsap.ticker.add(() => { if (tl && tl.isActive()) sync(); });
+  const play = () => { btn.classList.add('hidden'); document.body.classList.add('playing'); tl.restart(); };
+  const pause = () => { tl.pause(); lbl.textContent = 'Restart'; btn.classList.remove('hidden'); document.body.classList.remove('playing'); btn.focus(); };
+  ready.then(() => {
+    tl.eventCallback('onComplete', () => tl.restart());   // loop: the held end frame hard-cuts to the hook on the downbeat
+    const t0 = parseFloat(params.get('t'));
+    tl.totalTime(isNaN(t0) ? 14.5 : t0); sync();          // poster = end frame (or ?t=seconds for scrubbing)
+    if (params.has('autoplay')) play();
+  });
+  btn.addEventListener('click', e => { e.stopPropagation(); play(); });
+  stage.addEventListener('click', () => { if (tl && tl.isActive()) pause(); });
+  addEventListener('keydown', e => {
+    if (e.code !== 'Space' || !tl) return;
+    e.preventDefault();
+    tl.isActive() ? pause() : play();
+  });
+}
+})();
+</script>
+</body>
+</html>

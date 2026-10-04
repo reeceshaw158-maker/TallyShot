@@ -14,6 +14,14 @@ import { useAppStore } from '../src/stores/appStore';
 import { getDb } from '../src/db/schema';
 import { darkTokens, lightTokens } from '../src/theme';
 import { initPurchases, getProStatus } from '../src/services/purchases';
+import { ScreenError } from '../src/components/ScreenError';
+
+/**
+ * Expo Router renders this instead of a blank screen when anything below the
+ * root layout throws while rendering. Exported from the root layout so it
+ * covers every route in the app.
+ */
+export { ScreenError as ErrorBoundary };
 
 const fontConfig = {
   default: { fontFamily: 'Inter_400Regular', fontWeight: '400' as const },
@@ -42,7 +50,7 @@ const lightTheme = {
     primary: lightTokens.accent,
     onPrimary: lightTokens.textInverse,
     secondary: lightTokens.cta,
-    primaryContainer: '#e0e7ff',
+    primaryContainer: '#D5F5EA',
     onPrimaryContainer: lightTokens.accent,
     background: lightTokens.background,
     surface: lightTokens.surface,
@@ -63,7 +71,7 @@ const darkTheme = {
     primary: darkTokens.accent,
     onPrimary: darkTokens.textInverse,
     secondary: darkTokens.cta,
-    primaryContainer: '#1e1b4b',
+    primaryContainer: '#06291F',
     onPrimaryContainer: darkTokens.accent,
     background: darkTokens.background,
     surface: darkTokens.surface,
@@ -96,7 +104,10 @@ export default function RootLayout() {
   const headerText = paperTheme.colors.onBackground;
 
   useEffect(() => {
-    getDb().catch(console.error);
+    // Swallowed on purpose: every screen that reads the DB opens it itself and
+    // surfaces its own failure in the UI. This call is only a warm-up, and a
+    // console write here would be the app's one piece of production logging.
+    getDb().catch(() => {});
     resetScanCountIfNewMonth();
     // Initialise RevenueCat and refresh Pro status on every launch.
     initPurchases().then(() => getProStatus().then(setIsPro));
@@ -128,6 +139,8 @@ export default function RootLayout() {
         <Stack.Screen name="preview" options={{ title: 'Preview' }} />
         <Stack.Screen name="archived" options={{ title: 'Archived Receipts' }} />
         <Stack.Screen name="scan-history" options={{ title: 'Scan history' }} />
+        <Stack.Screen name="manual-barcode" options={{ title: 'Enter barcode' }} />
+        <Stack.Screen name="compare" options={{ title: 'Compare' }} />
         <Stack.Screen name="paywall" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
     </PaperProvider>

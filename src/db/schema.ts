@@ -1,5 +1,17 @@
 import * as SQLite from 'expo-sqlite';
 
+/**
+ * Migration diagnostics, development only.
+ *
+ * A failed `ALTER TABLE` here is never fatal — every one of these columns is
+ * additive and the queries that use them tolerate its absence — but it is
+ * exactly the kind of thing you want shouted at you while developing. Stripped
+ * in release builds so the app ships with no console output.
+ */
+function devWarn(message: string, error: unknown) {
+  if (__DEV__) console.warn(`TallyShot DB: ${message}`, error);
+}
+
 let db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -98,7 +110,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
         `ALTER TABLE receipts ADD COLUMN status TEXT NOT NULL DEFAULT 'complete'`
       );
     } catch (e) {
-      console.warn('TallyShot DB: status column migration failed', e);
+      devWarn('status column migration failed', e);
     }
   }
 
@@ -115,7 +127,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
         WHERE category IN ('Travel', 'Transport', 'Accommodation', 'Office & Tech')
       `);
     } catch (e) {
-      console.warn('TallyShot DB: is_tax_deductible column migration failed', e);
+      devWarn('is_tax_deductible column migration failed', e);
     }
   }
 
@@ -125,7 +137,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     try {
       await db.execAsync(`ALTER TABLE receipts ADD COLUMN invoice_number TEXT`);
     } catch (e) {
-      console.warn('TallyShot DB: invoice_number column migration failed', e);
+      devWarn('invoice_number column migration failed', e);
     }
   }
 
@@ -136,7 +148,7 @@ async function initSchema(db: SQLite.SQLiteDatabase) {
     try {
       await db.execAsync(`ALTER TABLE receipts ADD COLUMN archived_at TEXT`);
     } catch (e) {
-      console.warn('TallyShot DB: archived_at column migration failed', e);
+      devWarn('archived_at column migration failed', e);
     }
   }
 

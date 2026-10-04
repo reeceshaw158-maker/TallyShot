@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -118,7 +119,7 @@ type ScanPhase =
   | { kind: 'confirming'; frame: FrozenFrame }
   | { kind: 'looking'; code: string; type: string }
   | { kind: 'result'; card: ProductCard }
-  | { kind: 'notfound'; code: string; type: string; incomplete: boolean }
+  | { kind: 'notfound'; code: string; type: string; incomplete: boolean; offline: boolean }
   | { kind: 'ingredients'; card: ProductCard };
 
 export default function CaptureScreen() {
@@ -183,6 +184,12 @@ export default function CaptureScreen() {
   const frameUriRef = useRef<string | null>(null);
   /** Latest live read, shown in the viewfinder chip while still hunting. */
   const [liveCode, setLiveCode] = useState<string | null>(null);
+  /**
+   * The stability counter as a 0-1 value, purely so the overlay can render it.
+   * The counter itself stays a ref: it is written on every camera frame and
+   * must not drive a re-render at that rate.
+   */
+  const [lockProgress, setLockProgress] = useState(0);
   /** Was the previous poll a lock? Used so the haptic fires on the transition
    *  into a lock, not on every poll that happens to still be locked. */
   const wasLockedRef = useRef(false);
@@ -297,6 +304,7 @@ export default function CaptureScreen() {
     setDetection(null);
     setPhase({ kind: 'hunting' });
     setLiveCode(null);
+    setLockProgress(0);
     setAlternatives(null);
     stableCodeRef.current = null;
     stableCountRef.current = 0;
@@ -361,18 +369,19 @@ export default function CaptureScreen() {
     setPhase({ kind: 'looking', code, type });
     setAlternatives(null);
     try {
-      const { card, incomplete } = await findProduct(code, type);
+      const { card, incomplete, offline } = await findProduct(code, type);
       if (card) {
         hapticMedium();
         setPhase({ kind: 'result', card });
         addScanToHistory(card);
       } else {
-        setPhase({ kind: 'notfound', code, type, incomplete });
+        setPhase({ kind: 'notfound', code, type, incomplete, offline });
       }
     } catch {
-      // Offline or every API down — same outcome as a miss: the user still
-      // gets AI-guess and manual entry, never a dead end.
-      setPhase({ kind: 'notfound', code, type, incomplete: true });
+      // findProduct is documented never to throw, so reaching here means
+      // something structural broke rather than a lookup failing. Treat it the
+      // most conservatively available way — claim nothing about the product.
+      setPhase({ kind: 'notfound', code, type, incomplete: true, offline: false });
     }
   }, []);
 
@@ -481,6 +490,7 @@ export default function CaptureScreen() {
         stableCountRef.current = 1;
       }
       setLiveCode(data);
+      setLockProgress(Math.min(1, stableCountRef.current / STABLE_READS));
 
       if (stableCountRef.current < STABLE_READS) return;
       stableCountRef.current = 0;
@@ -588,6 +598,7 @@ export default function CaptureScreen() {
     stableCodeRef.current = null;
     stableCountRef.current = 0;
     setLiveCode(null);
+    setLockProgress(0);
     setAlternatives(null);
     setPhase({ kind: 'hunting' });
   }, [discardFrame]);
@@ -631,22 +642,50 @@ export default function CaptureScreen() {
     return <View style={styles.container} />;
   }
 
-  // Permission denied
-  if (!permission.granted) {
+  // Permission denied.
+  //
+  // Two genuinely different states hide behind `!granted`, and conflating them
+  // is how a user gets trapped: after two Android denials `canAskAgain` goes
+  // false and `requestPermission()` resolves instantly with no system dialog,
+  // so an "Allow Camera" button becomes a button that visibly does nothing.
+  // In that state the only route left is the OS settings page.
+  //
+  // A `rescan` never needs the camera at all — it is answered from the cache or
+  // the database chain — so a user who has declined the camera can still open a
+  // product from scan history, or type a barcode in by hand.
+  if (!permission.granted && !rescan) {
+    const blocked = !permission.canAskAgain;
     return (
       <View style={[styles.container, styles.permContainer]}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
         <MaterialCommunityIcons name="camera-off" size={72} color="rgba(255,255,255,0.4)" />
         <Text style={styles.permTitle}>Camera access needed</Text>
-        <Text style={styles.permBody}>TallyShot needs camera access to photograph receipts.</Text>
-        <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
-          <Text style={styles.permBtnText}>Allow Camera</Text>
+        <Text style={styles.permBody}>
+          {mode === 'barcode'
+            ? 'TallyShot needs your camera to scan product barcodes.'
+            : 'TallyShot needs your camera to photograph receipts.'}
+          {blocked ? '\n\nYou have turned this off, so we can no longer ask from inside the app — it has to be switched back on in Settings.' : ' Photos stay on your device.'}
+        </Text>
+        <TouchableOpacity
+          style={styles.permBtn}
+          onPress={blocked ? () => Linking.openSettings().catch(() => {}) : requestPermission}
+        >
+          <Text style={styles.permBtnText}>{blocked ? 'Open Settings' : 'Allow Camera'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.galleryBtn} onPress={handleGallery}>
           <MaterialCommunityIcons name="image" size={20} color="white" />
           <Text style={styles.galleryBtnText}>Choose from Gallery</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.galleryBtn} onPress={() => router.push('/manual-barcode')}>
+          <MaterialCommunityIcons name="keyboard" size={20} color="white" />
+          <Text style={styles.galleryBtnText}>Type a barcode instead</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
           <MaterialCommunityIcons name="close" size={24} color="rgba(255,255,255,0.6)" />
         </TouchableOpacity>
       </View>
@@ -658,21 +697,25 @@ export default function CaptureScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFill}
-        facing={facing}
-        flash={flash}
-        enableTorch={torch}
-        zoom={ZOOM_STEPS[zoomIndex].value}
-        animateShutter={false}
-        active={isFocused}
-        onCameraReady={() => setReady(true)}
-        barcodeScannerSettings={{ barcodeTypes: [...BARCODE_TYPES] }}
-        onBarcodeScanned={
-          mode === 'barcode' && phase.kind === 'hunting' ? onBarcodeScanned : undefined
-        }
-      />
+      {/* Mounted only with permission: a rescan reaches this screen without it
+          and must not instantiate a camera it is not allowed to open. */}
+      {permission.granted && (
+        <CameraView
+          ref={cameraRef}
+          style={StyleSheet.absoluteFill}
+          facing={facing}
+          flash={flash}
+          enableTorch={torch}
+          zoom={ZOOM_STEPS[zoomIndex].value}
+          animateShutter={false}
+          active={isFocused}
+          onCameraReady={() => setReady(true)}
+          barcodeScannerSettings={{ barcodeTypes: [...BARCODE_TYPES] }}
+          onBarcodeScanned={
+            mode === 'barcode' && phase.kind === 'hunting' ? onBarcodeScanned : undefined
+          }
+        />
+      )}
 
       {/* Tapping the viewfinder runs a one-shot AI find — the manual version
           of AI assist, so it's useful even with the toggle off. */}
@@ -701,6 +744,7 @@ export default function CaptureScreen() {
           aiSuspended={aiSuspended}
           sourceAspect={sourceAspect}
           barcodeValue={liveCode}
+          lockProgress={lockProgress}
           barcodeBox={null}
         />
       )}
@@ -720,7 +764,7 @@ export default function CaptureScreen() {
       {mode === 'barcode' && phase.kind === 'ingredients' && (
         <View style={styles.ingredientsOverlay} pointerEvents="none">
           <View style={styles.ingredientsHint}>
-            <MaterialCommunityIcons name="text-recognition" size={18} color="#f59e0b" />
+            <MaterialCommunityIcons name="text-recognition" size={18} color="#00C896" />
             <Text style={styles.ingredientsHintText}>
               Fill the frame with the ingredients list, then tap the shutter
             </Text>
@@ -730,7 +774,12 @@ export default function CaptureScreen() {
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Close the scanner"
+        >
           <MaterialCommunityIcons name="close" size={24} color="white" />
         </TouchableOpacity>
 
@@ -746,6 +795,9 @@ export default function CaptureScreen() {
                 setMode(m);
               }}
               activeOpacity={0.9}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === m }}
+              accessibilityLabel={m === 'receipt' ? 'Scan a receipt' : 'Scan a barcode'}
             >
               <MaterialCommunityIcons
                 name={m === 'receipt' ? 'receipt' : 'barcode-scan'}
@@ -766,6 +818,9 @@ export default function CaptureScreen() {
               hapticLight();
               setTorch((t) => !t);
             }}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: torch }}
+            accessibilityLabel={torch ? 'Turn the torch off' : 'Turn the torch on'}
           >
             <MaterialCommunityIcons
               name={torch ? 'flashlight' : 'flashlight-off'}
@@ -780,6 +835,10 @@ export default function CaptureScreen() {
               hapticLight();
               setFlash((f) => (f === 'off' ? 'auto' : f === 'auto' ? 'on' : 'off'));
             }}
+            accessibilityRole="button"
+            accessibilityLabel={`Flash ${flash}. Tap to switch to ${
+              flash === 'off' ? 'auto' : flash === 'auto' ? 'on' : 'off'
+            }.`}
           >
             <MaterialCommunityIcons
               name={flashIcon}
@@ -849,7 +908,7 @@ export default function CaptureScreen() {
             onPress={() => router.push('/paywall')}
             activeOpacity={0.85}
           >
-            <MaterialCommunityIcons name="crown" size={16} color="#fbbf24" />
+            <MaterialCommunityIcons name="crown" size={16} color="#00C896" />
             <Text style={styles.limitText}>
               Monthly limit reached — tap to unlock unlimited scans
             </Text>
@@ -885,7 +944,13 @@ export default function CaptureScreen() {
               { marginBottom: Math.max(24, insets.bottom + 12), maxHeight: winH * 0.72 },
             ]}
           >
-            <TouchableOpacity style={styles.cardClose} onPress={resetBarcode} hitSlop={12}>
+            <TouchableOpacity
+              style={styles.cardClose}
+              onPress={resetBarcode}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close this product and scan another"
+            >
               <MaterialCommunityIcons name="close" size={20} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
             <ProductCardView
@@ -909,11 +974,16 @@ export default function CaptureScreen() {
         ) : mode === 'barcode' && phase.kind === 'looking' ? (
           <View style={[styles.card, { marginBottom: Math.max(24, insets.bottom + 12) }]}>
             <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="barcode" size={18} color="#f59e0b" />
+              <MaterialCommunityIcons name="barcode" size={18} color="#00C896" />
               <Text style={styles.cardCode} numberOfLines={1}>
                 {phase.code}
               </Text>
-              <TouchableOpacity onPress={resetBarcode} hitSlop={10}>
+              <TouchableOpacity
+                onPress={resetBarcode}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel this lookup"
+              >
                 <MaterialCommunityIcons name="close" size={18} color="rgba(255,255,255,0.6)" />
               </TouchableOpacity>
             </View>
@@ -927,28 +997,57 @@ export default function CaptureScreen() {
         ) : mode === 'barcode' && phase.kind === 'notfound' ? (
           <View style={[styles.card, { marginBottom: Math.max(24, insets.bottom + 12) }]}>
             <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="barcode" size={18} color="#f59e0b" />
+              <MaterialCommunityIcons name="barcode" size={18} color="#00C896" />
               <Text style={styles.cardCode} numberOfLines={1}>
                 {phase.code}
               </Text>
-              <TouchableOpacity onPress={resetBarcode} hitSlop={10}>
+              <TouchableOpacity
+                onPress={resetBarcode}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel this lookup"
+              >
                 <MaterialCommunityIcons name="close" size={18} color="rgba(255,255,255,0.6)" />
               </TouchableOpacity>
             </View>
             <Text style={styles.cardTitle}>
-              {phase.incomplete ? "Couldn't check every database" : 'Not in any database yet'}
+              {phase.offline
+                ? "Can't reach the databases"
+                : phase.incomplete
+                  ? "Couldn't check every database"
+                  : 'Not in any database yet'}
             </Text>
+            {/* Three genuinely different situations. Reporting all three as
+                "not found" is how a scanner earns the review "it says nothing
+                exists" \u2014 when in fact the phone had no signal. */}
             <Text style={styles.cardNote}>
-              {phase.incomplete
-                ? 'We hit the free databases\u2019 rate limit, so this might still be findable in a minute. Try again shortly, or carry on below.'
-                : !isRetailBarcode(phase.code, phase.type)
-                  ? 'That is not a retail product barcode, so no product database will list it. You can still ask the AI or type the details in.'
-                  : 'We checked the free worldwide product databases. Ask the AI for a best guess, or type the details yourself \u2014 the barcode stays saved either way.'}
+              {phase.offline
+                ? 'Every lookup failed to get through, which usually means no connection rather than an unknown product. Nothing has been saved as a miss, so it is worth trying again once you have signal.'
+                : phase.incomplete
+                  ? 'We hit the free databases\u2019 rate limit, so this might still be findable in a minute. Try again shortly, or carry on below.'
+                  : !isRetailBarcode(phase.code, phase.type)
+                    ? 'That is not a retail product barcode, so no product database will list it. You can still ask the AI or type the details in.'
+                    : 'We checked the free worldwide product databases. Ask the AI for a best guess, or type the details yourself \u2014 the barcode stays saved either way.'}
             </Text>
+            {phase.offline && (
+              <TouchableOpacity
+                style={styles.primaryBtn}
+                onPress={() => runDbLookup(phase.code, phase.type)}
+                accessibilityRole="button"
+                accessibilityLabel="Try the lookup again"
+              >
+                <Text style={styles.primaryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            )}
+            {/* The AI guess needs the same network the chain just failed on,
+                so offline it is demoted rather than offered as the answer. */}
             <TouchableOpacity
-              style={[styles.primaryBtn, (!canScan || aiLooking) && styles.btnDisabled]}
+              style={[
+                phase.offline ? styles.secondaryBtn : styles.primaryBtn,
+                (!canScan || aiLooking || phase.offline) && styles.btnDisabled,
+              ]}
               onPress={handleAiGuess}
-              disabled={!canScan || aiLooking}
+              disabled={!canScan || aiLooking || phase.offline}
             >
               {aiLooking ? (
                 <ActivityIndicator size="small" color="#000" />
@@ -958,6 +1057,14 @@ export default function CaptureScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryBtn} onPress={manualWithBarcode}>
               <Text style={styles.secondaryBtnText}>Type details myself</Text>
+            </TouchableOpacity>
+            {/* The scan itself may have been the problem — a damaged or curved
+                barcode can decode to a plausible-looking wrong number. */}
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => router.push('/manual-barcode')}
+            >
+              <Text style={styles.secondaryBtnText}>Re-enter the barcode by hand</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryBtn} onPress={resetBarcode}>
               <Text style={styles.secondaryBtnText}>Scan another</Text>
@@ -971,12 +1078,21 @@ export default function CaptureScreen() {
               <TouchableOpacity
                 style={styles.sideBtn}
                 onPress={() => setPhase({ kind: 'result', card: phase.card })}
+                accessibilityRole="button"
+                accessibilityLabel="Back to the product"
               >
                 <MaterialCommunityIcons name="arrow-left" size={26} color="white" />
                 <Text style={styles.sideBtnLabel}>Back</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.sideBtn} onPress={handleGallery} disabled={!canScan}>
+              <TouchableOpacity
+                style={styles.sideBtn}
+                onPress={handleGallery}
+                disabled={!canScan}
+                accessibilityRole="button"
+                accessibilityLabel="Choose a photo from your gallery"
+                accessibilityState={{ disabled: !canScan }}
+              >
                 <MaterialCommunityIcons name="image-multiple" size={26} color="white" />
                 <Text style={styles.sideBtnLabel}>Gallery</Text>
               </TouchableOpacity>
@@ -988,6 +1104,9 @@ export default function CaptureScreen() {
                 onPress={handleCapture}
                 disabled={!canScan || capturing}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={capturing ? 'Taking the photo' : 'Photograph this receipt'}
+                accessibilityState={{ disabled: !canScan || capturing, busy: capturing }}
               >
                 <View style={[styles.shutterRing, lockedBox && styles.shutterRingLocked]}>
                   <View
@@ -1005,6 +1124,13 @@ export default function CaptureScreen() {
                 onPress={captureIngredients}
                 disabled={readingIngredients}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  readingIngredients
+                    ? 'Reading the ingredients'
+                    : 'Photograph the ingredients panel'
+                }
+                accessibilityState={{ disabled: readingIngredients, busy: readingIngredients }}
               >
                 <View style={styles.shutterRing}>
                   {readingIngredients ? (
@@ -1043,7 +1169,7 @@ const styles = StyleSheet.create({
   permTitle: { color: 'white', fontSize: 22, fontWeight: '700', textAlign: 'center', marginTop: 16 },
   permBody: { color: 'rgba(255,255,255,0.6)', fontSize: 15, textAlign: 'center', lineHeight: 22 },
   permBtn: {
-    backgroundColor: '#818cf8',
+    backgroundColor: '#00C896',
     paddingHorizontal: 36,
     paddingVertical: 14,
     borderRadius: 30,
@@ -1071,7 +1197,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtnOn: { backgroundColor: '#fbbf24', borderColor: '#fbbf24' },
+  iconBtnOn: { backgroundColor: '#00C896', borderColor: '#00C896' },
 
   segment: {
     flexDirection: 'row',
@@ -1105,8 +1231,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 1,
   },
-  railBtnOn: { backgroundColor: '#818cf8', borderColor: '#818cf8' },
-  railBtnPaused: { backgroundColor: 'rgba(129,140,248,0.55)', borderColor: 'rgba(129,140,248,0.8)' },
+  railBtnOn: { backgroundColor: '#00C896', borderColor: '#00C896' },
+  railBtnPaused: { backgroundColor: 'rgba(0,200,150,0.55)', borderColor: 'rgba(0,200,150,0.8)' },
   railLabel: { color: 'white', fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5 },
   railLabelOn: { color: '#000' },
 
@@ -1225,7 +1351,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.7)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(245,158,11,0.5)',
+    borderColor: 'rgba(0,200,150,0.5)',
   },
   ingredientsHintText: { color: 'white', fontSize: 12.5, flexShrink: 1, lineHeight: 17 },
 
@@ -1251,7 +1377,7 @@ const styles = StyleSheet.create({
   metaChipText: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' },
 
   primaryBtn: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#00C896',
     borderRadius: 14,
     minHeight: 48,
     alignItems: 'center',

@@ -1,5 +1,349 @@
 # TallyShot changelog
 
+## Unreleased - Slice 16: E-numbers, servings, grid, and the version bump
+
+Clearing the remaining backlog. Two items are deliberately still not built -
+see the bottom.
+
+### E-numbers in plain English
+
+New `src/services/additives.ts`: a curated table of ~150 additives. Each entry
+says what the substance *is* and what job it does. E621 is "flavour enhancer -
+savoury depth (umami). MSG", not a verdict on whether you should eat it.
+
+**A table, not an AI call**, for three reasons in order of importance. A
+hallucinated additive description is a safety problem rather than a cosmetic
+one - this is the part of the card a vegetarian or someone with a sulphite
+sensitivity actually acts on. It works offline and costs nothing, so it appears
+on every card rather than behind a button and a scan credit. And these facts do
+not change: an additive's function is fixed by the regulation authorising it.
+
+Notes are restricted to facts that are themselves *label statements* or
+*sourcing facts*:
+
+- The six colours (E102, E104, E110, E122, E124, E129) that legally must carry
+  "may have an adverse effect on activity and attention in children"
+- Animal-derived ones: E120 cochineal (insects), E904 shellac (insects),
+  E901 beeswax, E1105 lysozyme (egg white), E631 (often fish or meat)
+- Sulphites E220-E228 as declarable allergens above 10mg/kg
+- E951 aspartame as a source of phenylalanine
+- E171 titanium dioxide: no longer authorised in the EU, still permitted in GB
+
+An unrecognised code is still listed, saying we have no entry for it - dropping
+it silently would misrepresent what is in the product. Sub-variants fall back to
+the base code (E472e to E472), since those share a function.
+
+### Per-serving nutrition
+
+Only ever scaled from `serving_quantity` - the figure Open Food Facts has
+already parsed out of the free-text serving size. Parsing "about 3 biscuits
+(30g)" ourselves would be guesswork, and a wrong serving size silently
+multiplies every number on the panel.
+
+**Traffic lights are not repeated on the serving panel.** The FSA colours are
+defined per 100g; recolouring them against a serving would be inventing a
+rating scheme and passing it off as the official one.
+
+### Full-width product photo
+
+The header photo was a 68px thumbnail. The photo is the one thing a person
+recognises at a glance, so it is now a full-width hero, height-capped so a tall
+bottle cannot push the card off screen.
+
+### Scan history grid view
+
+Toggle in the header. Grid leads with the photo, list leads with text - people
+remember a scan by what the packet looked like more reliably than by its name.
+Swipe-to-delete stays a list action: a horizontal swipe on a two-column grid
+fights the scroll.
+
+### Share actually shares the findings
+
+It sent name, brand and barcode - none of which the recipient could not read off
+the packet. It now sends the part they cannot see: Nutri-Score, Eco-Score, NOVA,
+kcal, the four traffic-light figures with their ratings, ABV and units, declared
+allergens, the not-advice footer and ODbL attribution.
+
+### Accessibility
+
+Labels on the remaining icon-only controls: selection cancel and search clear on
+the receipts list, delete-all in settings, archive on receipt detail, restore and
+permanent-delete in archived.
+
+### Dependency versions
+
+`npx expo install --fix` brought 18 packages up to their SDK 55 pins (`expo`
+55.0.23 to 55.0.31, `react-native` 0.83.6 to 0.83.10, and 16 others).
+**`expo-doctor` now reports 20/20, up from 19/20.** `tsc` clean and the Android
+bundle exports clean after the bump.
+
+### Deliberately NOT built - both need a decision
+
+- **Branded share image card.** Rendering a view to PNG needs
+  `react-native-view-shot`, a native module that is **not in Expo Go**. Per the
+  standing Expo Go rule this was flagged rather than installed; the text share
+  above is the Expo-Go-safe improvement.
+- **Sentry crash reporting.** `@sentry/react-native` is also a native module
+  that breaks Expo Go, *and* it needs a DSN from a Sentry account that does not
+  exist yet. Two blockers, both needing input.
+
+### Verification
+
+- `npx tsc --noEmit` -> 0 errors
+- `npx expo export --platform android` -> clean bundle
+- `npx expo-doctor` -> **20/20**
+
+---
+
+## Unreleased - Slice 15: Compare mode
+
+Phase 6. Pick two products from scan history and see them side by side.
+
+### No network
+
+Scan history already stores each `ProductCard` in full, so comparing is a pure
+function over two rows of SQLite - instant, and it works on a plane. No lookup,
+no cache round-trip, no AI.
+
+### The rule this screen is built around
+
+A comparison screen is where a nutrition app is most tempted to start giving
+advice, and where doing so would be least defensible. Every claim here is
+arithmetic: 3 is less than 9, B comes before D. The highlight means **lower
+number** or **earlier letter** - never "healthier", never "buy this one".
+
+Each ordered row states what winning means right next to it ("lower", "closer
+to A", "less processed", "fewer") so a green cell can't be mistaken for a
+recommendation. The summary line ends by saying so outright: *"That is
+arithmetic, not a recommendation - which measures matter is your call."*
+
+**Allergens are deliberately not ordered.** Fewer allergens is not better; it
+depends entirely on which allergen and which person. The row lists what each
+side declares and highlights neither.
+
+### Comparing things that aren't comparable
+
+Nothing stops you picking a lipstick and a lager. Rows omit themselves when
+neither side has the figure and sections drop when they end up empty, so an
+incomparable pair produces a short honest screen rather than a grid of dashes.
+When nothing at all lines up, the summary says exactly that.
+
+### Rows
+
+Nutri-Score, Eco-Score, NOVA; energy and the four FSA nutrients per 100g/100ml;
+ABV and UK units; declared allergens and additive count; claimed certifications;
+pack size and country. The per-100 unit switches to 100ml only when *both* sides
+are drinks.
+
+### Selection
+
+Scales icon in the scan history header enters compare mode: rows become
+checkboxes, two picks navigates. Picking a third replaces the older of the two
+rather than refusing - that is what a third tap means. Swipe-to-delete is
+suppressed while picking, since the same horizontal drag would otherwise both
+select and delete; the PanResponder reads `selectable` through a ref because it
+is created once and would otherwise close over the first render's props.
+
+### Verification
+
+- `npx tsc --noEmit` -> 0 errors
+- `npx expo export --platform android` -> clean bundle
+
+---
+
+## Unreleased - Slice 14: Badges, pills and the entry animation
+
+Product-card work, picking up the Phase 3/4 items that were unblocked. Nothing
+here needs the AI Worker, so none of it is affected by the billing blocker.
+
+### Diet, certification and eco badges
+
+Open Food Facts carries this data and the card was ignoring it. New badge row:
+organic, vegan, vegetarian, gluten free, halal, kosher, cruelty free,
+Fairtrade, no palm oil - plus **contains / may contain palm oil**, the one
+badge that is a warning rather than a credential.
+
+**Declared and derived are not shown as the same thing.** OFF has two kinds of
+claim and conflating them would be the most dangerous thing on this card:
+
+- `labels_tags` is what the producer has actually claimed and printed.
+- `ingredients_analysis_tags` is OFF's own reading of the ingredient list.
+
+Derived badges carry an asterisk and a footnote saying so. Anyone avoiding an
+ingredient for medical or religious reasons needs to know which one they are
+looking at, and "probably vegan, we read the list" is not a thing to state as
+fact. Where a producer has claimed a certification, the derived version is
+suppressed rather than shown alongside - two rows for one fact reads as two
+separate findings.
+
+**Eco-Score** now sits next to Nutri-Score, same a-e scale and colours.
+
+### Allergens as pills
+
+They were a comma-separated sentence. An allergen in a sentence is findable; an
+allergen as a row of amber chips is unmissable, which is the whole job of that
+part of the card.
+
+### Calories per alcohol unit
+
+Pure ethanol is 7 kcal/g at 0.789 g/ml, and a UK unit is 10ml of it - about
+55 kcal per unit before anything else in the drink counts. Stated as "from the
+alcohol alone" for exactly that reason: a sweet cider's real figure is higher
+and this number must not read as a total.
+
+### Card entry animation
+
+Spring slide-and-scale with a linear fade over the top. The fade is deliberately
+not a spring - a spring on opacity overshoots past 1 and clips, invisible on
+paper and obvious on a phone.
+
+Keyed to the barcode rather than to mount, because the card component is reused
+between scans; without the key a second scan would animate in the *previous*
+product's card and then swap its contents.
+
+### Smaller
+
+- **Pull to refresh** on scan history, tracked separately from first load so it
+  doesn't swap in skeleton rows mid-gesture.
+- **Accessibility labels on every icon-only camera control** - close, torch,
+  flash, shutter, gallery, mode switch, card dismiss. These were the controls a
+  screen reader could not announce at all. Flash says where the next tap goes
+  ("Flash auto. Tap to switch to on."); torch and the mode switch report state.
+- **Cache rows written before this slice backfill their new fields on read**
+  rather than being discarded. A cache hit that renders without its badges beats
+  throwing away a valid offline result.
+
+### Verification
+
+- `npx tsc --noEmit` -> 0 errors
+- `npx expo export --platform android` -> clean bundle
+
+---
+
+## Unreleased - Slice 13: Audit fixes
+
+A stability and store-readiness pass off the back of a full codebase audit.
+No new product surface except one screen; the rest is making existing surface
+behave when things go wrong. Full findings in `docs/tallyshot-memory/BUGS.md`.
+
+### The one that mattered most
+
+**Every AI feature was pointed at a placeholder hostname in Expo Go.**
+`EXPO_PUBLIC_WORKER_URL` was only ever set in `eas.json` build profiles, and
+`expo start` does not read those, so the client fell back to
+`https://your-worker.your-subdomain.workers.dev`. Receipt extraction, AI camera
+assist, the AI barcode guess and the ingredients reader all failed on DNS in
+development. Fixed with a `.env` (gitignored, so it needs creating per machine).
+`expo-doctor` now reports `env: export EXPO_PUBLIC_WORKER_URL`.
+
+This did not affect EAS builds, and never affected the free database chain,
+which is why barcode scanning half-worked and the failure read as random.
+
+### Store blockers
+
+- **Target SDK 36.** Google Play has required API 36 for new apps and updates
+  since 31 Aug 2026; the project asked for 35. It also asked for it in
+  `app.json`'s `android` block, where modern Expo does not read
+  `targetSdkVersion`/`minSdkVersion` at all - those belong to
+  `expo-build-properties`, which is now installed and carries
+  `compileSdkVersion`/`targetSdkVersion` 36 and `minSdkVersion` 29.
+- **RECORD_AUDIO removed from `permissions`.** It was listed in `permissions`
+  *and* `blockedPermissions` simultaneously. A microphone permission in a
+  receipt scanner's manifest is a Data Safety red flag for no benefit;
+  `recordAudioAndroid: false` was already set on the camera plugin.
+
+### Never show the user a dead end
+
+- **Camera permission has two states, not one.** After two Android denials
+  `canAskAgain` goes false and `requestPermission()` resolves instantly with no
+  dialog - so the "Allow Camera" button was a button that visibly did nothing.
+  That state now says so plainly and opens the OS settings page instead. The
+  copy also stops claiming the camera is for receipts when you opened the
+  scanner in barcode mode.
+- **Error boundaries.** There were none anywhere in the app: any render throw
+  produced a blank screen with no way back. `ScreenError` is now exported as
+  `ErrorBoundary` from the root layout, so it covers every route. It uses React
+  Native's own `Text`, not Paper's, because it may be rendered in place of a
+  crashed layout with no `PaperProvider` above it.
+- **Purchases.** `purchasePackage()` was the one function in the RevenueCat
+  wrapper without a null guard, so tapping subscribe in Expo Go threw
+  `Cannot read property 'purchasePackage' of null` straight at the user.
+
+### Offline is not "this product does not exist"
+
+`findProduct` could not tell a dead connection from a genuine miss, so a user
+with no signal was told the thing in their hand is in no database on earth -
+and that miss was then cached for six hours, outliving the signal problem.
+
+The transport layer now reports *why* a lookup returned nothing. A result where
+every source failed to connect is `offline: true`, which gets its own card
+("Can't reach the databases"), a Try again button, no cached miss, and demotes
+the AI guess - which needs the same network that just failed.
+
+### Retry with backoff
+
+`getJson` and the Worker `post` each made exactly one attempt. A single dropped
+packet - a phone handing off between cells mid-scan - became "not in any
+database". Lookups now make two attempts with a 400ms then 800ms backoff.
+
+Two attempts and no more, deliberately: these are free public databases with a
+per-IP ban policy, and a scanner that retries hard on a flaky connection is
+precisely the client they ban.
+
+### Type the barcode in
+
+New screen (`app/manual-barcode.tsx`) for barcodes that are torn, curved round
+a tin, under shrink wrap, wet, or printed too small to resolve. Reachable from
+the not-found card and from the permission-denied screen - it needs no camera.
+
+It verifies the GTIN check digit before spending a round trip. A scanner has
+already done this, but a human copying 13 digits off a pack transposes two of
+them regularly, and "not in any database" is a terrible way to say "you
+mistyped it". Digits then hand off to the existing `rescan` lookup path, cache
+first.
+
+A rescan never needed the camera, so the permission gate no longer blocks one -
+which also fixes opening a product from scan history with the camera declined.
+`CameraView` is only mounted when permission is actually granted.
+
+### Lock-on you can see
+
+Barcode mode had no lock-on moment: the `lockPop` spring existed but was wired
+to the AI *receipt* detection box. The stability counter that gates every scan
+(3 identical consecutive reads) is now surfaced as `lockProgress`: brackets
+walk diagonally inward, the colour warms amber to green, the frame flashes once
+on lock, and the status line reads "Hold still..." mid-lock instead of showing
+digits. The counter itself stays a ref - it is written on every camera frame and
+must not drive a re-render at that rate.
+
+### Smaller
+
+- **Scan history** now shows skeleton rows instead of a centred spinner.
+- **Three unused native dependencies removed**: `react-native-vision-camera`,
+  `react-native-nitro-modules`, `react-native-nitro-image`. Zero imports between
+  them, and none work in Expo Go - one stray import would have ended Expo Go
+  compatibility silently.
+- **No ungated console calls left.** The four SQLite migration warnings were
+  worth keeping, so they went behind `__DEV__` rather than being deleted.
+
+### Verification
+
+- `npx tsc --noEmit` -> 0 errors
+- `npx expo export --platform android` -> clean bundle
+- `npx expo-doctor` -> 19/20 (see below)
+
+### Known, not addressed here
+
+- **The Anthropic key behind the Worker still has no credit.** Every AI feature
+  stays down until it is topped up. Independent of the URL fix above.
+- **`expo-doctor`'s one remaining failure** is patch-level drift: 18 packages
+  sit slightly behind what SDK 55 pins (e.g. `expo` 55.0.23 vs ~55.0.31). All
+  within SDK 55. Pre-existing, and an 18-package bump is its own slice.
+- **The brand palette conflict is unresolved.** `docs/tallyshot-memory/PROJECT.md`
+  specifies dark-first teal `#00C896`; the app ships indigo `#818cf8` + amber
+  `#f59e0b` with a light mode. Nothing here re-skins anything.
+
+
 ## Unreleased — Slice 12: Best-in-class product scanner
 
 Slice 11 made the scanner find products. This slice makes it *tell you about

@@ -26,9 +26,19 @@ export interface ScannerOverlayProps {
   barcodeValue?: string | null;
   /** Bounding box for the live barcode, in preview coordinates (px). */
   barcodeBox?: { x: number; y: number; width: number; height: number } | null;
+  /**
+   * How close the current read is to being acted on, 0–1.
+   *
+   * Driven by the same consecutive-identical-reads counter that gates the
+   * scan (`STABLE_READS` in capture.tsx). Surfacing it is what turns an
+   * invisible 300ms wait into a visible lock-on: the brackets walk inwards and
+   * the colour warms as the count climbs, so a user who moves too early can
+   * see that they moved too early.
+   */
+  lockProgress?: number;
 }
 
-const ACCENT = '#818cf8';
+const ACCENT = '#00C896';
 const LOCK = '#34c759';
 const WARN = '#f59e0b';
 
@@ -68,12 +78,16 @@ export default function ScannerOverlay({
   sourceAspect,
   barcodeValue,
   barcodeBox,
+  lockProgress = 0,
 }: ScannerOverlayProps) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const sweep = useRef(new Animated.Value(0)).current;
   const lockPop = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
   const boxFade = useRef(new Animated.Value(0)).current;
+  /** Barcode lock-on: brackets snap inward, frame flashes. */
+  const snap = useRef(new Animated.Value(0)).current;
+  const flash = useRef(new Animated.Value(0)).current;
 
   const locked = !!detection?.found && detection.confidence >= LOCK_CONFIDENCE;
   const lockKey = locked
@@ -120,6 +134,30 @@ export default function ScannerOverlay({
     return () => loop.stop();
   }, [pulse]);
 
+  // Barcode lock-on. Spring rather than timing, because the brackets should
+  // arrive with a little weight — a linear slide reads as a progress bar, and
+  // this is meant to read as something clamping shut.
+  useEffect(() => {
+    if (mode !== 'barcode') return;
+    Animated.spring(snap, {
+      toValue: lockProgress,
+      friction: 7,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+
+    // One white flash at the moment of lock, and only on the transition in.
+    if (lockProgress >= 1) {
+      flash.setValue(1);
+      Animated.timing(flash, {
+        toValue: 0,
+        duration: 320,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [lockProgress, mode, snap, flash]);
+
   // "Snap on" whenever the detection moves to a new position.
   useEffect(() => {
     if (!locked) {
@@ -155,11 +193,22 @@ export default function ScannerOverlay({
   const mapped =
     locked && size.w ? mapBox(detection!.box, size.w, size.h, sourceAspect) : null;
 
-  const cornerColor = locked ? LOCK : mode === 'barcode' ? WARN : ACCENT;
+  // At full lock the barcode brackets turn green like the receipt lock box, so
+  // the two scanners speak the same colour language.
+  const cornerColor = locked
+    ? LOCK
+    : mode === 'barcode'
+      ? lockProgress >= 1
+        ? LOCK
+        : WARN
+      : ACCENT;
 
   const statusText = (() => {
     if (mode === 'barcode') {
-      return barcodeValue ? `Barcode: ${barcodeValue}` : 'Point at a barcode';
+      if (!barcodeValue) return 'Point at a barcode';
+      // Mid-lock the useful instruction is "don't move", not the digits.
+      if (lockProgress > 0 && lockProgress < 1) return 'Hold still…';
+      return `Barcode: ${barcodeValue}`;
     }
     if (detecting) return 'AI is looking…';
     if (locked) {
@@ -226,11 +275,22 @@ export default function ScannerOverlay({
               ]}
             >
               <LinearGradient
-                colors={['rgba(129,140,248,0)', 'rgba(129,140,248,0.35)', 'rgba(129,140,248,0)']}
+                colors={['rgba(0,200,150,0)', 'rgba(0,200,150,0.35)', 'rgba(0,200,150,0)']}
                 style={styles.sweepGlow}
               />
               <View style={styles.sweepLine} />
             </Animated.View>
+          )}
+
+          {/* Lock flash — a single white wash over the framed area. */}
+          {mode === 'barcode' && (
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFillObject,
+                styles.lockFlash,
+                { opacity: flash.interpolate({ inputRange: [0, 1], outputRange: [0, 0.5] }) },
+              ]}
+            />
           )}
 
           <Animated.View
@@ -239,10 +299,39 @@ export default function ScannerOverlay({
               { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] }) },
             ]}
           >
-            <View style={[styles.corner, styles.tl, { borderColor: cornerColor }]} />
-            <View style={[styles.corner, styles.tr, { borderColor: cornerColor }]} />
-            <View style={[styles.corner, styles.bl, { borderColor: cornerColor }]} />
-            <View style={[styles.corner, styles.br, { borderColor: cornerColor }]} />
+            {/* Each bracket travels diagonally inward as the lock builds. The
+                offsets are mirrored per corner so they converge on the centre. */}
+            {([
+              ['tl', styles.tl, 1, 1],
+              ['tr', styles.tr, -1, 1],
+              ['bl', styles.bl, 1, -1],
+              ['br', styles.br, -1, -1],
+            ] as const).map(([key, cornerStyle, sx, sy]) => (
+              <Animated.View
+                key={key}
+                style={[
+                  styles.corner,
+                  cornerStyle,
+                  { borderColor: cornerColor },
+                  {
+                    transform: [
+                      {
+                        translateX: snap.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, SNAP_DISTANCE * sx],
+                        }),
+                      },
+                      {
+                        translateY: snap.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, SNAP_DISTANCE * sy],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            ))}
           </Animated.View>
         </View>
       )}
@@ -309,9 +398,12 @@ export default function ScannerOverlay({
 
 const CORNER = 30;
 const CW = 3;
+/** How far each bracket travels inward at full lock, in px. */
+const SNAP_DISTANCE = 14;
 
 const styles = StyleSheet.create({
   dim: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.45)' },
+  lockFlash: { backgroundColor: 'white' },
   frame: { position: 'absolute', overflow: 'hidden', borderRadius: 4 },
   cornerWrap: { ...StyleSheet.absoluteFillObject },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderRadius: 3 },
@@ -339,7 +431,7 @@ const styles = StyleSheet.create({
   sweepGlow: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 90 },
   sweepLine: {
     height: 2,
-    backgroundColor: 'rgba(199,205,255,0.95)',
+    backgroundColor: 'rgba(178,255,230,0.95)',
     shadowColor: ACCENT,
     shadowOpacity: 0.9,
     shadowRadius: 6,

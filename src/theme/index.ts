@@ -5,9 +5,9 @@
  * `useThemeTokens()` rather than hardcoding hex values, so the app supports
  * dark and light without per-screen `if (isDark)` branches.
  *
- * Palette: Indigo × Amber.
- * Indigo is the dominant 2026 fintech accent (Revolut, Wise family).
- * Amber CTA keeps the warm, unmissable action contrast.
+ * Palette: one teal accent (#00C896) on near-black, matching the brief in
+ * docs/tallyshot-memory/PROJECT.md and the promo reel. Amber survives only
+ * as the semantic warning colour, never as brand.
  */
 
 import { useColorScheme } from 'react-native';
@@ -29,8 +29,8 @@ export interface SemanticTokens {
 
   // Brand
   accent: string;            // teal — selection, links, info chips
-  cta: string;               // amber — primary action button
-  ctaText: string;           // text colour on amber CTA
+  cta: string;               // teal — primary action button
+  ctaText: string;           // text colour on the CTA
 
   // Semantic
   success: string;
@@ -48,20 +48,20 @@ export interface SemanticTokens {
 }
 
 export const darkTokens: SemanticTokens = {
-  background: '#000000',
-  surface: '#111111',
-  surfaceElevated: '#1c1c1e',
-  surfaceMuted: '#0a0a0a',
+  background: '#06080A',
+  surface: '#111819',
+  surfaceElevated: '#1B2425',
+  surfaceMuted: '#0C1112',
   border: 'rgba(255,255,255,0.1)',
 
-  textPrimary: '#f5f5f7',
-  textMuted: '#a1a1a6',
-  textSubtle: '#6e6e73',
-  textInverse: '#000000',
+  textPrimary: '#F2F5F4',
+  textMuted: '#A1ABA8',
+  textSubtle: '#6E7A77',
+  textInverse: '#03140E',
 
-  accent: '#818cf8',         // indigo — TallyShot brand
-  cta: '#f59e0b',            // amber — TallyShot brand
-  ctaText: '#000000',
+  accent: '#00C896',         // teal — TallyShot brand
+  cta: '#00C896',            // teal — TallyShot brand
+  ctaText: '#03140E',
 
   success: '#34c759',
   successBg: 'rgba(52,199,89,0.14)',
@@ -88,9 +88,9 @@ export const lightTokens: SemanticTokens = {
   textSubtle: '#8a8a8a',
   textInverse: '#ffffff',
 
-  accent: '#4f46e5',         // indigo-600 (WCAG AA on white)
-  cta: '#f5a623',
-  ctaText: '#0a0a0a',
+  accent: '#00866A',         // deep teal (4.5:1 on white, WCAG AA)
+  cta: '#00C896',
+  ctaText: '#03140E',
 
   success: '#15803d',
   successBg: '#dcfce7',

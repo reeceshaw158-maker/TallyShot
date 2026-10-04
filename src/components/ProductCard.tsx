@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ScrollView,
   Share,
   Linking,
+  Animated,
+  Easing,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,10 +31,17 @@ import {
   parsePackSize,
   LIGHT_TEXT,
   NOT_ADVICE_FOOTER,
+  deriveBadges,
+  ecoScoreGrade,
+  buildServingRows,
+  formatServing,
+  KCAL_PER_UK_UNIT,
+  type ProductBadge,
   type DietaryFlag,
   type Light,
 } from '../services/nutrition';
 import { hapticLight } from '../utils/haptics';
+import { explainAdditives } from '../services/additives';
 
 /**
  * The product card.
@@ -47,6 +56,18 @@ import { hapticLight } from '../utils/haptics';
  * Every number here is a restatement of the pack. Nothing on this card tells
  * the user what to do about it.
  */
+
+/** `en:tree-nuts` -> `Tree nuts`. OFF prefixes every tag by language. */
+function titleCaseTag(tag: string): string {
+  const clean = tag.replace(/^[a-z]{2}:/, '').replace(/-/g, ' ').trim();
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+const BADGE_TONE: Record<'good' | 'neutral' | 'watch', { bg: string; fg: string }> = {
+  good: { bg: 'rgba(52,199,89,0.16)', fg: '#7ee2a0' },
+  neutral: { bg: 'rgba(255,255,255,0.09)', fg: 'rgba(255,255,255,0.8)' },
+  watch: { bg: 'rgba(245,158,11,0.16)', fg: '#f7c065' },
+};
 
 const LIGHT_COLOR: Record<Light, string> = {
   green: '#2f9e44',
@@ -85,10 +106,59 @@ export default function ProductCardView({
   const [showIngredients, setShowIngredients] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  /**
+   * Entry animation.
+   *
+   * Keyed to the barcode rather than to mount, because the card component is
+   * reused between scans — without the key a second scan would slide in the
+   * first product's card and then swap its contents, which reads as a glitch.
+   *
+   * Spring for the movement and a linear fade over the top: a spring on opacity
+   * overshoots past 1 and clips, which is invisible on paper and obvious on a
+   * phone.
+   */
+  const enter = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    enter.setValue(0);
+    fade.setValue(0);
+    Animated.parallel([
+      Animated.spring(enter, {
+        toValue: 1,
+        friction: 9,
+        tension: 70,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [card.barcode, enter, fade]);
+
   const isDrink = card.kind === 'drink' || card.kind === 'alcohol';
   const isFoodish = card.kind === 'food' || isDrink;
 
   const pack = useMemo(() => parsePackSize(card.quantity), [card.quantity]);
+  const badges = useMemo(
+    () =>
+      deriveBadges({
+        labelsTags: card.labelsTags,
+        ingredientsAnalysisTags: card.ingredientsAnalysisTags,
+      }),
+    [card.labelsTags, card.ingredientsAnalysisTags]
+  );
+  const ecoGrade = ecoScoreGrade(card.ecoscoreGrade);
+  const servingRows = useMemo(
+    () => (isFoodish ? buildServingRows(card.nutriments, card.servingQuantity, isDrink) : []),
+    [card.nutriments, card.servingQuantity, isDrink, isFoodish]
+  );
+  const explained = useMemo(() => explainAdditives(card.additivesTags), [card.additivesTags]);
+  const [showAdditives, setShowAdditives] = useState(false);
+  /** True when any badge on show was inferred rather than claimed. */
+  const anyDerived = badges.some((b) => b.certainty === 'derived');
   const rows = useMemo(
     () => (isFoodish ? buildNutrientRows(card.nutriments, isDrink, pack?.total) : []),
     [card.nutriments, isDrink, isFoodish, pack?.total]
@@ -120,9 +190,58 @@ export default function ProductCardView({
     setTimeout(() => setCopied(false), 1600);
   };
 
+  /**
+   * Share the findings, not just the name.
+   *
+   * The old version sent name, brand and barcode — which tells the person
+   * receiving it nothing they could not read off the packet themselves. What
+   * is worth sending is the part they cannot see: the scores, the allergens,
+   * the units.
+   *
+   * Text rather than an image card: rendering a view to PNG needs
+   * react-native-view-shot, a native module that is not in Expo Go, and this
+   * app's dev loop runs on Expo Go.
+   */
   const shareProduct = () => {
     hapticLight();
-    const lines = [card.name, card.brand, `Barcode: ${card.barcode}`].filter(Boolean);
+    const lines: string[] = [];
+
+    const title = [card.name, card.brand && card.brand !== card.name ? `— ${card.brand}` : '']
+      .filter(Boolean)
+      .join(' ');
+    if (title) lines.push(title);
+    if (card.quantity) lines.push(card.quantity);
+    lines.push('');
+
+    if (grade) lines.push(`Nutri-Score ${grade.toUpperCase()}`);
+    if (ecoGrade) lines.push(`Eco-Score ${ecoGrade.toUpperCase()}`);
+    if (nova) lines.push(`Processing: ${nova}`);
+    if (kcal !== null) lines.push(`${Math.round(kcal)} kcal per 100${isDrink ? 'ml' : 'g'}`);
+
+    for (const r of rows) {
+      lines.push(
+        `${r.label}: ${r.per100 < 1 ? r.per100.toFixed(2) : r.per100.toFixed(1)}g (${LIGHT_TEXT[r.light]})`
+      );
+    }
+
+    if (alcohol) {
+      lines.push(`${alcohol.abv}% ABV`);
+      if (alcohol.unitsPerContainer !== null) {
+        lines.push(`${formatUnits(alcohol.unitsPerContainer)} UK units per container`);
+      }
+    }
+
+    if (card.allergensTags.length) {
+      lines.push('');
+      lines.push(`Allergens: ${card.allergensTags.map(titleCaseTag).join(', ')}`);
+    }
+
+    lines.push('');
+    lines.push(`Barcode ${card.barcode}`);
+    lines.push(NOT_ADVICE_FOOTER);
+    if (isOpenFactsSource(card.source)) lines.push(OPEN_FACTS_ATTRIBUTION);
+    lines.push('Scanned with TallyShot');
+
     Share.share({ message: lines.join('\n') }).catch(() => {});
   };
 
@@ -133,20 +252,42 @@ export default function ProductCardView({
   };
 
   return (
-    <ScrollView
-      style={styles.scroll}
+    <Animated.ScrollView
+      style={[
+        styles.scroll,
+        {
+          opacity: fade,
+          transform: [
+            {
+              translateY: enter.interpolate({
+                inputRange: [0, 1],
+                outputRange: [28, 0],
+              }),
+            },
+            {
+              scale: enter.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.96, 1],
+              }),
+            },
+          ],
+        },
+      ]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {/* ---- Header: photo, name, brand ---- */}
+      {/* ---- Header: full-width hero photo, then name and brand ----
+           Product photos are the one piece of a card a person recognises at a
+           glance, and a 68px thumbnail wastes that. The hero is capped in
+           height so a tall bottle cannot push the whole card off screen. */}
+      {card.imageUrl ? (
+        <Image source={{ uri: card.imageUrl }} style={styles.hero} resizeMode="contain" />
+      ) : (
+        <View style={[styles.hero, styles.photoEmpty]}>
+          <MaterialCommunityIcons name="package-variant" size={38} color="rgba(255,255,255,0.25)" />
+        </View>
+      )}
       <View style={styles.header}>
-        {card.imageUrl ? (
-          <Image source={{ uri: card.imageUrl }} style={styles.photo} resizeMode="contain" />
-        ) : (
-          <View style={[styles.photo, styles.photoEmpty]}>
-            <MaterialCommunityIcons name="package-variant" size={26} color="rgba(255,255,255,0.3)" />
-          </View>
-        )}
         <View style={styles.headerText}>
           <Text style={styles.name} numberOfLines={3}>
             {card.name || 'Not identified'}
@@ -204,6 +345,14 @@ export default function ProductCardView({
                 <Text style={styles.scoreCaption}>Nutri-Score</Text>
               </View>
             )}
+            {ecoGrade && (
+              <View style={styles.scoreBlock}>
+                <View style={[styles.gradeBadge, { backgroundColor: NUTRISCORE_COLOR[ecoGrade] }]}>
+                  <Text style={styles.gradeText}>{ecoGrade.toUpperCase()}</Text>
+                </View>
+                <Text style={styles.scoreCaption}>Eco-Score</Text>
+              </View>
+            )}
             {nova && (
               <View style={styles.scoreBlock}>
                 <View style={styles.novaBadge}>
@@ -251,6 +400,31 @@ export default function ProductCardView({
                   the UK front-of-pack rules.
                 </Text>
               )}
+
+              {/* Per-serving, only where the database has a serving to scale
+                  to. Traffic lights are not repeated here: the FSA colours are
+                  defined per 100g, and recolouring them against a serving
+                  would be inventing a rating scheme. */}
+              {servingRows.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>
+                    PER SERVING{card.servingSize ? ` · ${card.servingSize.toUpperCase()}` : ''}
+                  </Text>
+                  <View style={styles.servingGrid}>
+                    {servingRows.map((r) => (
+                      <View key={r.key} style={styles.servingCell}>
+                        <Text style={styles.servingValue}>{formatServing(r)}</Text>
+                        <Text style={styles.servingLabel}>{r.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.footnote}>
+                    Scaled from the per-100 figures using the serving size on file. Colours above
+                    are the UK front-of-pack ratings, which are defined per 100
+                    {isDrink ? 'ml' : 'g'}.
+                  </Text>
+                </>
+              )}
             </>
           )}
         </View>
@@ -280,6 +454,13 @@ export default function ProductCardView({
               </View>
             )}
           </View>
+          {alcohol.unitsPerContainer !== null && (
+            <Text style={styles.footnote}>
+              That is roughly {Math.round(alcohol.unitsPerContainer * KCAL_PER_UK_UNIT)} kcal from
+              the alcohol alone ({KCAL_PER_UK_UNIT} kcal per unit). Anything sweet in the drink
+              adds to that.
+            </Text>
+          )}
           {alcohol.unitsPerContainer === null && (
             <Text style={styles.footnote}>
               No container size on file, so units can't be worked out from the database alone.
@@ -345,18 +526,94 @@ export default function ProductCardView({
           </>
         )}
 
-        {card.allergensTags.length > 0 && (
-          <Text style={styles.allergenLine}>
-            Declared allergens:{' '}
-            {card.allergensTags
-              .map((t) => t.replace(/^[a-z]{2}:/, '').replace(/-/g, ' '))
-              .join(', ')}
-          </Text>
+        {badges.length > 0 && (
+          <View style={styles.allergenWrap}>
+            <Text style={styles.allergenHeading}>DIET & CERTIFICATION</Text>
+            <View style={styles.pillRow}>
+              {badges.map((b: ProductBadge) => (
+                <View
+                  key={b.key}
+                  style={[styles.badgePill, { backgroundColor: BADGE_TONE[b.tone].bg }]}
+                >
+                  <MaterialCommunityIcons
+                    name={b.icon as any}
+                    size={12}
+                    color={BADGE_TONE[b.tone].fg}
+                  />
+                  <Text style={[styles.badgePillText, { color: BADGE_TONE[b.tone].fg }]}>
+                    {b.label}
+                  </Text>
+                  {b.certainty === 'derived' && <Text style={styles.derivedMark}>*</Text>}
+                </View>
+              ))}
+            </View>
+            {anyDerived && (
+              <Text style={styles.derivedNote}>
+                * Read from the ingredient list rather than claimed on the pack. If you
+                are avoiding something strictly, check the label itself.
+              </Text>
+            )}
+          </View>
         )}
-        {additives.length > 0 && (
-          <Text style={styles.allergenLine}>
-            Additives ({additives.length}): {additives.join(', ')}
-          </Text>
+
+        {/* Pills, not a sentence. An allergen buried in a comma-separated line
+            is findable; the same allergen as a row of amber chips is
+            unmissable, which is the entire job of this part of the card. */}
+        {card.allergensTags.length > 0 && (
+          <View style={styles.allergenWrap}>
+            <Text style={styles.allergenHeading}>DECLARED ALLERGENS</Text>
+            <View style={styles.pillRow}>
+              {card.allergensTags.map((t) => (
+                <View key={t} style={styles.allergenPill}>
+                  <MaterialCommunityIcons name="alert-circle" size={12} color="#f59e0b" />
+                  <Text style={styles.allergenPillText}>
+                    {titleCaseTag(t)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+        {explained.length > 0 && (
+          <View style={styles.allergenWrap}>
+            <Text style={styles.allergenHeading}>ADDITIVES ({explained.length})</Text>
+            {(showAdditives ? explained : explained.slice(0, 3)).map((a) => (
+              <View key={a.code} style={styles.additiveRow}>
+                <Text style={styles.additiveCode}>{a.code}</Text>
+                <View style={styles.additiveBody}>
+                  {a.info ? (
+                    <>
+                      <Text style={styles.additiveName}>{a.info.name}</Text>
+                      <Text style={styles.additiveRole}>{a.info.role}</Text>
+                      {!!a.info.note && <Text style={styles.additiveNote}>{a.info.note}</Text>}
+                    </>
+                  ) : (
+                    /* Listed even when unexplained — dropping it would
+                       misrepresent what is actually in the product. */
+                    <Text style={styles.additiveRole}>
+                      Listed on the pack. We don&rsquo;t have a plain-English entry for this one yet.
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+            {explained.length > 3 && (
+              <TouchableOpacity
+                onPress={() => {
+                  hapticLight();
+                  setShowAdditives((v) => !v);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+              >
+                <Text style={styles.linkText}>
+                  {showAdditives
+                    ? 'Show fewer'
+                    : `Show all ${explained.length} additives`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
@@ -461,7 +718,7 @@ export default function ProductCardView({
       <TouchableOpacity style={styles.secondaryBtn} onPress={onScanAnother} activeOpacity={0.7}>
         <Text style={styles.secondaryBtnText}>Scan another</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
@@ -473,6 +730,13 @@ const styles = StyleSheet.create({
   scroll: { flexShrink: 1 },
   scrollContent: { paddingBottom: 4 },
 
+  hero: {
+    width: '100%',
+    height: 150,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 12,
+  },
   header: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   photo: { width: 68, height: 68, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)' },
   photoEmpty: { alignItems: 'center', justifyContent: 'center' },
@@ -589,13 +853,74 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   linkText: {
-    color: '#f59e0b',
+    color: '#00C896',
     fontSize: 12.5,
     fontWeight: '700',
     marginTop: 6,
     paddingVertical: 4,
   },
   emptyNote: { color: 'rgba(255,255,255,0.5)', fontSize: 12.5, lineHeight: 18, marginBottom: 10 },
+  allergenWrap: { marginTop: 12, gap: 7 },
+  servingGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  servingCell: {
+    flexGrow: 1,
+    minWidth: 68,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    gap: 2,
+  },
+  servingValue: { color: 'white', fontSize: 14.5, fontWeight: '700' },
+  servingLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 10.5, fontWeight: '600' },
+
+  additiveRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  additiveCode: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 11.5,
+    fontWeight: '800',
+    minWidth: 46,
+    paddingTop: 1,
+  },
+  additiveBody: { flex: 1, gap: 1 },
+  additiveName: { color: 'white', fontSize: 12.5, fontWeight: '600' },
+  additiveRole: { color: 'rgba(255,255,255,0.62)', fontSize: 12, lineHeight: 16.5 },
+  additiveNote: { color: '#f7c065', fontSize: 11.5, lineHeight: 16 },
+  allergenHeading: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  allergenPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(245,158,11,0.16)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(245,158,11,0.4)',
+  },
+  allergenPillText: { color: '#f7c065', fontSize: 12, fontWeight: '700' },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  badgePillText: { fontSize: 12, fontWeight: '600' },
+  derivedMark: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700' },
+  derivedNote: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11,
+    lineHeight: 15.5,
+  },
   allergenLine: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
@@ -659,7 +984,7 @@ const styles = StyleSheet.create({
   attribution: { color: 'rgba(255,255,255,0.32)', fontSize: 10, marginTop: 4 },
 
   primaryBtn: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#00C896',
     borderRadius: 14,
     minHeight: 50,
     alignItems: 'center',

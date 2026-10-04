@@ -432,7 +432,13 @@ export default function ReceiptDetailScreen() {
           >
             Edit receipt
           </Button>
-          <TouchableOpacity onPress={handleArchive} style={styles.deleteBtn} hitSlop={8}>
+          <TouchableOpacity
+            onPress={handleArchive}
+            style={styles.deleteBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Archive this receipt"
+          >
             <MaterialCommunityIcons name="archive-outline" size={18} color={t.danger} />
             <Text style={[styles.deleteText, { color: t.danger }]}>Archive receipt</Text>
           </TouchableOpacity>

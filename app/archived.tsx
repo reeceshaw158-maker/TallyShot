@@ -164,12 +164,24 @@ function ArchivedRow({
         </View>
       </View>
       <View style={[styles.actionRow, { borderTopColor: tokens.border }]}>
-        <TouchableOpacity onPress={onRestore} style={styles.actionBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={onRestore}
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Restore this receipt"
+        >
           <MaterialCommunityIcons name="restore" size={18} color={tokens.accent} />
           <Text style={[styles.actionText, { color: tokens.accent }]}>Restore</Text>
         </TouchableOpacity>
         <View style={[styles.actionDivider, { backgroundColor: tokens.border }]} />
-        <TouchableOpacity onPress={onPermanentDelete} style={styles.actionBtn} activeOpacity={0.7}>
+        <TouchableOpacity
+          onPress={onPermanentDelete}
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Delete this receipt permanently"
+        >
           <MaterialCommunityIcons name="delete-forever-outline" size={18} color={tokens.danger} />
           <Text style={[styles.actionText, { color: tokens.danger }]}>Delete forever</Text>
         </TouchableOpacity>

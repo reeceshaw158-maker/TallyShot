@@ -5,9 +5,16 @@
  * if the API key is missing (e.g. in development) they return sensible
  * defaults instead of crashing.
  */
+import { Platform } from 'react-native';
 import type { PurchasesPackage } from 'react-native-purchases';
 
-const RC_KEY = process.env.EXPO_PUBLIC_REVENUECAT_KEY ?? '';
+// RevenueCat issues a separate public SDK key per store (appl_… for Apple,
+// goog_… for Google). EXPO_PUBLIC_REVENUECAT_KEY is the older single-key
+// setting, kept as the Android fallback so existing builds keep working.
+const RC_KEY =
+  (Platform.OS === 'ios'
+    ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY
+    : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? process.env.EXPO_PUBLIC_REVENUECAT_KEY) ?? '';
 
 // react-native-purchases is a native module — not available in Expo Go.
 // We lazy-require it so Metro doesn't crash when running in the dev client.

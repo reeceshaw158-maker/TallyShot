@@ -1,127 +1,105 @@
 # Privacy Policy — TallyShot
 
-**Effective date:** TBD (set on launch day)
-**Last updated:** TBD
-**Contact:** privacy@tallyshot.app *(replace with your actual email before publishing)*
+**Effective date:** set on launch day
+**Last updated:** 4 October 2026
+**Publisher:** Reece Shaw (United Kingdom)
+**Contact:** {{CONTACT_EMAIL}}
 
-This is the privacy policy for **TallyShot**, an Android app published by **[Your Name / Company]** that scans receipts and tracks expenses on your device.
+This is the privacy policy for **TallyShot**, an app for iPhone and Android that scans receipts and product barcodes and tracks expenses on your device.
 
-This policy is written to reflect what TallyShot actually does, not boilerplate. If anything below stops being true, we will update this page and bump the "Last updated" date.
+This policy is written to reflect what TallyShot actually does, not boilerplate. If anything below stops being true, we will update this page and change the "Last updated" date.
 
 ---
 
 ## 1. What we collect
 
-**TallyShot does not require an account.** You do not give us an email, password, name, or phone number to use the app.
+**TallyShot does not require an account.** You do not give us an email, password, name or phone number to use the app.
 
 The app stores the following data **on your device only**:
 
 - Receipt photos you take or import
 - Receipt details you save (merchant, date, amounts, line items, category, notes, payment method, tax-deductible flag)
-- Your settings (chosen region, tax mode, currency, theme, AI scan counter, scanner preferences)
-- Any ingredients or allergens you choose to flag in Settings, so scans can highlight them. This list stays on your device and is never sent anywhere — matching happens locally, on data already fetched.
-- A cache of product barcodes you have scanned and the product details found for them (so rescans are instant and work offline)
+- Your settings (region, tax mode, currency, theme, AI scan counter, scanner preferences)
+- Any ingredients or allergens you choose to flag in Settings, so scans can highlight them. This list never leaves your device; matching happens locally
+- A cache of product barcodes you have scanned and the product details found for them
 - Your scan history: the products you have scanned and when
 
-This data lives in a SQLite database in the app's private storage area and in image files in the app's private documents directory. **We do not have a server-side copy of any of it.**
+This data lives in a database and image files in the app's private storage. **We do not have a server-side copy of any of it.**
 
 ---
 
-## 2. What gets sent to a third party (and what doesn't)
+## 2. What gets sent to third parties (and what doesn't)
 
-When you tap **Scan** and the AI extraction runs, TallyShot sends:
+**AI receipt reading.** When you tap **Scan**, TallyShot sends the **receipt photo** (resized and compressed) and a short **prompt** describing your tax mode to our **Cloudflare Worker proxy**, which forwards it to **Anthropic's Claude API** for text extraction and returns the result to your phone. The Worker **does not log or store** the image, the prompt or the result. Anthropic's handling is governed by the [Anthropic Privacy Policy](https://www.anthropic.com/legal/privacy).
 
-- The **receipt photo** (resized to 1024px wide, JPEG quality 60%, base64 encoded)
-- A **prompt** describing your tax mode (e.g. "GB / VAT inclusive") so the AI parses correctly
+**Barcode lookups.** When you scan a product barcode, TallyShot sends **only the barcode digits** to free public product databases: the **Open Food Facts** family ([privacy policy](https://world.openfoodfacts.org/privacy)) and **UPCitemdb** ([terms](https://www.upcitemdb.com/wp/docs/main/terms-of-service/)). If no database knows the product, you can optionally ask our AI proxy for a best guess, which again sends only the digits.
 
-…to our **Cloudflare Worker proxy**. The Worker forwards the request to **Anthropic's Claude API** for text extraction, returns the structured result to your phone, and **does not log or store the image, the prompt, or the result**. Anthropic's data handling is governed by the [Anthropic API Usage Policy](https://www.anthropic.com/legal/aup) and [Anthropic Privacy Policy](https://www.anthropic.com/legal/privacy). At time of writing, Anthropic does not use API inputs to train models.
+**Ingredient photos.** Only if you tap **"Photograph the ingredients"** is a photo of the pack sent to our AI proxy to be read, with the same handling as receipt photos.
 
-When you scan a **product barcode**, TallyShot sends **only the barcode digits** — nothing else, and nothing about you — to free public product databases to identify the product:
+**Subscriptions.** If you subscribe to TallyShot Pro, payment is handled entirely by **Apple (App Store)** or **Google (Google Play)**. We never see your card details. We use **RevenueCat** to check whether your subscription is active. RevenueCat receives an anonymous app user ID, your purchase receipts, and basic device and app information (such as OS version and app version), and does not receive your receipts, photos or expense data. See the [RevenueCat Privacy Policy](https://www.revenuecat.com/privacy).
 
-- The **Open Food Facts family** (Open Food Facts, Open Beauty Facts, Open Products Facts, Open Pet Food Facts — run by the non-profit Open Food Facts association; see the [Open Food Facts privacy policy](https://world.openfoodfacts.org/privacy))
-- **UPCitemdb** (a general product database; see the [UPCitemdb terms](https://www.upcitemdb.com/wp/docs/main/terms-of-service/))
+**App updates.** TallyShot checks Expo's update service (EAS Update) for bug-fix updates. That request includes technical details such as the app version, platform and update channel, and no personal or receipt data. See the [Expo Privacy Policy](https://expo.dev/privacy).
 
-These requests contain no account, name, photo, or receipt data — just the barcode number, which identifies a product, not a person. If no database knows the product, you can optionally ask our AI proxy for a best guess; that request likewise contains only the barcode digits. Successful results are cached on your device so rescanning the same product needs no network call at all.
+**No advertising, analytics or tracking SDKs** are included, and we do not track you across other companies' apps or websites.
 
-If a product has no ingredient list on file, you can optionally tap **"Photograph the ingredients"**. Only then, and only when you tap it, is a photo of the pack sent to our AI proxy to be transcribed — the same processors and the same retention (none) as receipt photos. Nothing is sent unless you press that button.
-
-The ingredients and allergens you flag in Settings are **never transmitted**. Matching runs entirely on your device against data already fetched.
-
-**No analytics, ads, tracking SDKs, crash reporters, or third-party libraries with their own data collection are bundled with the app.** No data is sent to us beyond the AI extraction call.
-
-If you use the app fully offline (e.g. **manual receipt entry**), no data leaves your device at all.
+If you use the app offline (for example, manual receipt entry), no data leaves your device.
 
 ---
 
-## 3. Where data is stored and how long
+## 3. Where data is stored and for how long
 
 | Data | Where | Retention |
 |---|---|---|
-| Receipt photos | Your device (`receipts/` directory in app private storage) | Until you delete the receipt or uninstall the app |
-| Receipt records | Your device (SQLite: `tallyshot.db`) | Same as above |
-| Settings | Your device (AsyncStorage: `tallyshot-app-store`) | Same as above |
-| AI extraction request | Cloudflare Worker → Anthropic Claude API | Not stored by us. Anthropic's retention policy applies to the inference call (typically transient). |
-| Barcode lookup (digits only) | Open Food Facts family / UPCitemdb | Standard web-server request handling by those services; no account or personal data attached. |
-| Scanned-product cache | Your device (SQLite: `tallyshot.db`) | Until you tap Delete all data or uninstall the app |
+| Receipt photos and records, settings, scan history, product cache | Your device | Until you delete them or uninstall the app |
+| AI extraction request | Cloudflare Worker → Anthropic Claude API | Not stored by us. Anthropic's retention policy applies to the request |
+| Barcode lookup (digits only) | Open Food Facts / UPCitemdb | Standard web-server handling by those services; no personal data attached |
+| Subscription status | Apple / Google, and RevenueCat | As set out in their policies, for as long as needed to provide the subscription |
 
-Uninstalling TallyShot removes everything we stored.
+Uninstalling TallyShot removes everything stored on your device.
 
 ---
 
 ## 4. Your rights
 
-You can do all of the following without contacting us:
+Under UK data protection law you have rights to access, correct and delete your personal data. Because your data stays on your device, you can exercise most of them directly:
 
-- **View, edit, or delete any receipt** at any time within the app
+- **View, edit or delete any receipt** in the app
 - **Delete all data** in one tap (Settings → Delete all data)
 - **Export your data** as CSV or PDF (Settings → Export receipts)
-- **Disable AI scanning entirely** by simply not using the Scan button — manual entry works offline
+- **Avoid AI processing entirely** by using manual entry
 
-If you have a specific request that the app's UI doesn't satisfy (e.g. a question about what was sent in a particular API call), email us at the address at the top of this policy.
+Manage or cancel a subscription in your **Apple ID settings** (iPhone) or the **Google Play Store → Subscriptions** (Android). For anything else, email us at the address at the top of this page. You can also complain to the UK Information Commissioner's Office (ico.org.uk).
 
 ---
 
 ## 5. Children
 
-TallyShot is not directed at children under 13. We do not knowingly collect any data from children. If a parent or guardian believes their child has used the app and wants any device data removed, see Section 4 — uninstalling the app removes everything.
+TallyShot is not directed at children under 13, and we do not knowingly collect data from children.
 
 ---
 
 ## 6. Permissions
 
-TallyShot requests the following Android permissions:
+- **Camera:** to photograph receipts and scan barcodes, only while the Scan screen is open.
+- **Photos:** only when you tap "Choose from Gallery", through the system photo picker. The app does not get general access to your library.
+- **Internet:** for AI extraction, barcode lookups and subscription checks.
 
-- **Camera** — to photograph receipts and scan product barcodes. Used only when you open the Scan screen. Photos are saved to the app's private storage on your device.
-- **Internet** — required to send receipt photos to the AI extraction proxy and barcode digits to public product databases. The app works offline for manual entry, cached barcode rescans, list, search, filter, and export.
-
-The app does **not** request:
-
-- Location
-- Microphone
-- Contacts
-- Phone state
-- Photo library access (the system photo picker is used only when you explicitly tap "Choose from Gallery", and it does not give the app general access to your photos)
+TallyShot does **not** request location, microphone, contacts or phone-state access.
 
 ---
 
 ## 7. Security
 
-- All network traffic to the Cloudflare Worker uses **HTTPS (TLS)**.
-- The AI proxy authenticates calls to Anthropic with a server-side API key that never leaves the Worker. Your device never sees the Anthropic API key.
-- Local storage is in the app's **private app data area**, which is sandboxed by Android and not readable by other apps.
+All traffic to our proxy uses **HTTPS**. The Anthropic API key lives only on the server and never on your device. Local data sits in the app's private, sandboxed storage.
 
 ---
 
 ## 8. Changes to this policy
 
-If we change this policy, we will update the "Last updated" date and the new version will apply from that date. Material changes (e.g. adding a new third-party service or changing what data is sent) will be highlighted in a release-notes update.
+If we change this policy, we will update the "Last updated" date. Material changes, such as adding a new third-party service, will be noted in the app's release notes.
 
 ---
 
 ## 9. Contact
 
-Questions about this policy or about your data: **privacy@tallyshot.app** *(replace with your real address before publishing)*
-
----
-
-*This policy was last reviewed and is accurate as of the date above. It describes the published version of TallyShot on Google Play.*
+Questions about this policy or your data: **{{CONTACT_EMAIL}}**

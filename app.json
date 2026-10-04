@@ -22,7 +22,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.tallyshot.app"
+      "bundleIdentifier": "com.tallyshot.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

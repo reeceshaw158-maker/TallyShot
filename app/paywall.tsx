@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, TouchableOpacity, Linking, Platform } from 'react-native';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,6 +8,13 @@ import { getOfferings, purchasePackage, restorePurchases } from '../src/services
 import { useAppStore } from '../src/stores/appStore';
 import { useThemeTokens } from '../src/theme';
 import { hapticLight, hapticMedium } from '../src/utils/haptics';
+
+// Apple (Guideline 3.1.2) requires working Terms of Use and Privacy Policy
+// links in the purchase flow. Hosted from docs/ via GitHub Pages.
+const PRIVACY_URL = 'https://reeceshaw158-maker.github.io/TallyShot/privacy-policy.html';
+const TERMS_URL = 'https://reeceshaw158-maker.github.io/TallyShot/terms.html';
+const STORE = Platform.OS === 'ios' ? 'your Apple ID' : 'your Google Play account';
+const MANAGE = Platform.OS === 'ios' ? 'your Apple ID settings' : 'Google Play → Subscriptions';
 
 const PRO_FEATURES = [
   { icon: 'camera-burst',      text: 'Unlimited AI scans every month' },
@@ -41,6 +48,15 @@ export default function PaywallScreen() {
     offerings?.current?.annual;
 
   const selectedPkg = selected === 'monthly' ? monthlyPkg : annualPkg;
+
+  // Show the store's real, localised price. The £ strings are only a
+  // fallback for builds without RevenueCat (Expo Go), where buying is disabled.
+  const annualPrice = annualPkg?.product.priceString ?? '£24.99';
+  const monthlyPrice = monthlyPkg?.product.priceString ?? '£3.99';
+  const annualSaving =
+    annualPkg && monthlyPkg && monthlyPkg.product.price > 0
+      ? Math.round((1 - annualPkg.product.price / (monthlyPkg.product.price * 12)) * 100)
+      : 48;
 
   const handlePurchase = async () => {
     if (!selectedPkg) return;
@@ -134,10 +150,10 @@ export default function PaywallScreen() {
             </View>
             <Text style={[styles.priceLabel, { color: t.textMuted }]}>Annual</Text>
             <Text style={[styles.priceAmount, { color: t.textPrimary }]}>
-              {annualPkg?.product.priceString ?? '£24.99'}
+              {annualPrice}
             </Text>
             <Text style={[styles.priceSub, { color: t.textMuted }]}>per year</Text>
-            <Text style={[styles.priceSave, { color: t.accent }]}>Save 48%</Text>
+            {annualSaving > 0 && <Text style={[styles.priceSave, { color: t.accent }]}>Save {annualSaving}%</Text>}
           </TouchableOpacity>
 
           {/* Monthly */}
@@ -152,7 +168,7 @@ export default function PaywallScreen() {
           >
             <Text style={[styles.priceLabel, { color: t.textMuted }]}>Monthly</Text>
             <Text style={[styles.priceAmount, { color: t.textPrimary }]}>
-              {monthlyPkg?.product.priceString ?? '£3.99'}
+              {monthlyPrice}
             </Text>
             <Text style={[styles.priceSub, { color: t.textMuted }]}>per month</Text>
           </TouchableOpacity>
@@ -172,15 +188,27 @@ export default function PaywallScreen() {
           <>
             <MaterialCommunityIcons name="crown" size={20} color={t.ctaText} />
             <Text style={[styles.ctaText, { color: t.ctaText }]}>
-              Start Pro {selected === 'annual' ? '· £24.99/yr' : '· £3.99/mo'}
+              Start Pro · {selected === 'annual' ? `${annualPrice}/yr` : `${monthlyPrice}/mo`}
             </Text>
           </>
         )}
       </TouchableOpacity>
 
       <Text style={[styles.legal, { color: t.textSubtle }]}>
-        Cancel any time. Billed through Google Play. Subscription renews automatically.
+        {selected === 'annual' ? `${annualPrice} per year` : `${monthlyPrice} per month`}, charged to {STORE}.
+        Renews automatically unless cancelled at least 24 hours before the end of the period.
+        Cancel any time in {MANAGE}.
       </Text>
+
+      <View style={styles.legalLinks}>
+        <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL)} hitSlop={8}>
+          <Text style={[styles.legalLink, { color: t.textMuted }]}>Terms of Use</Text>
+        </TouchableOpacity>
+        <Text style={{ color: t.textSubtle, fontSize: 12 }}>·</Text>
+        <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={8}>
+          <Text style={[styles.legalLink, { color: t.textMuted }]}>Privacy Policy</Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
         <Text style={[styles.restoreText, { color: t.textMuted }]}>
@@ -230,6 +258,8 @@ const styles = StyleSheet.create({
   ctaText: { fontFamily: 'Inter_700Bold', fontSize: 16, letterSpacing: -0.2 },
 
   legal: { fontFamily: 'Inter_400Regular', fontSize: 11, textAlign: 'center', lineHeight: 16, marginBottom: 16 },
+  legalLinks: { flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 8 },
+  legalLink: { fontFamily: 'Inter_500Medium', fontSize: 12, textDecorationLine: 'underline' },
   restoreBtn: { alignSelf: 'center', padding: 8 },
   restoreText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
 });

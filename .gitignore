@@ -48,3 +48,6 @@ worker/.wrangler/
 
 # Local Netlify folder
 .netlify
+
+# Python
+__pycache__/
